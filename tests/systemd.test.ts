@@ -12,7 +12,8 @@ const state = (units: string, ...blocks: string[]) => ({
   [`${sc} show ${units} -p UnitFileState,ActiveState`]: { out: blocks.join("\n\n") },
 });
 const block = (fileState: string, active: string) => `UnitFileState=${fileState}\nActiveState=${active}\n`;
-const files = (job = intake) => Object.fromEntries(systemd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
+const files = (job = intake) =>
+  Object.fromEntries(systemd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
 const code = (f: () => unknown) => {
   try {
     f();
@@ -22,7 +23,10 @@ const code = (f: () => unknown) => {
 };
 
 test("first install writes, reloads and enables the timer", () => {
-  const f = fakeSys({}, state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")));
+  const f = fakeSys(
+    {},
+    state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")),
+  );
   expect(systemd.install(intake, fakeEnv, f.sys).changed).toBe(true);
   expect(f.mutations()).toEqual([
     `write ${dir}/tender-intake.service`,
@@ -33,7 +37,10 @@ test("first install writes, reloads and enables the timer", () => {
 });
 
 test("unchanged re-install makes zero mutations", () => {
-  const f = fakeSys(files(), state("tender-intake.timer tender-intake.service", block("enabled", "active"), block("static", "inactive")));
+  const f = fakeSys(
+    files(),
+    state("tender-intake.timer tender-intake.service", block("enabled", "active"), block("static", "inactive")),
+  );
   expect(systemd.install(intake, fakeEnv, f.sys).changed).toBe(false);
   expect(f.mutations()).toEqual([]);
 });
@@ -41,14 +48,24 @@ test("unchanged re-install makes zero mutations", () => {
 test("changed keepAlive re-install writes, reloads and restarts", () => {
   const old = files(run);
   old[`${dir}/tender-run.service`] = old[`${dir}/tender-run.service`]!.replace("RestartSec=30", "RestartSec=10");
-  const f = fakeSys(old, state("tender-run.service tender-run.timer", block("enabled", "active"), block("", "inactive")));
+  const f = fakeSys(
+    old,
+    state("tender-run.service tender-run.timer", block("enabled", "active"), block("", "inactive")),
+  );
   expect(systemd.install(run, fakeEnv, f.sys).changed).toBe(true);
-  expect(f.mutations()).toEqual([`write ${dir}/tender-run.service`, `exec ${sc} daemon-reload`, `exec ${sc} restart tender-run.service`]);
+  expect(f.mutations()).toEqual([
+    `write ${dir}/tender-run.service`,
+    `exec ${sc} daemon-reload`,
+    `exec ${sc} restart tender-run.service`,
+  ]);
 });
 
 test("switching a timer job to keepAlive disables and removes the old timer", () => {
   const job = { ...intake, schedule: { kind: "keepAlive", restart: "always" } } as const;
-  const f = fakeSys(files(), state("tender-intake.service tender-intake.timer", block("static", "inactive"), block("enabled", "active")));
+  const f = fakeSys(
+    files(),
+    state("tender-intake.service tender-intake.timer", block("static", "inactive"), block("enabled", "active")),
+  );
   systemd.install(job, fakeEnv, f.sys);
   expect(f.mutations()).toEqual([
     `exec ${sc} disable --now tender-intake.timer`,
@@ -60,13 +77,19 @@ test("switching a timer job to keepAlive disables and removes the old timer", ()
 });
 
 test("unchanged files but a stopped or disabled unit: enable --now and report changed", () => {
-  const f = fakeSys(files(), state("tender-intake.timer tender-intake.service", block("enabled", "inactive"), block("static", "inactive")));
+  const f = fakeSys(
+    files(),
+    state("tender-intake.timer tender-intake.service", block("enabled", "inactive"), block("static", "inactive")),
+  );
   expect(systemd.install(intake, fakeEnv, f.sys).changed).toBe(true);
   expect(f.mutations()).toEqual([`exec ${sc} enable --now tender-intake.timer`]);
 });
 
 test("switching a keepAlive job to a timer disables the old service", () => {
-  const f = fakeSys(files(run), state("tender-run.timer tender-run.service", block("", "inactive"), block("enabled", "active")));
+  const f = fakeSys(
+    files(run),
+    state("tender-run.timer tender-run.service", block("", "inactive"), block("enabled", "active")),
+  );
   systemd.install({ ...run, schedule: { kind: "interval", minutes: 15 } }, fakeEnv, f.sys);
   expect(f.mutations()).toEqual([
     `exec ${sc} disable --now tender-run.service`,
@@ -108,7 +131,10 @@ test("uninstall: missing is a no-op, unmarked or foreign is refused", () => {
 });
 
 test("uninstall timer job stops both units and tolerates their failures", () => {
-  const f = fakeSys(files(), { [`${sc} stop tender-intake.service`]: { code: 5 }, [`${sc} reset-failed tender-intake.service`]: { code: 1 } });
+  const f = fakeSys(files(), {
+    [`${sc} stop tender-intake.service`]: { code: 5 },
+    [`${sc} reset-failed tender-intake.service`]: { code: 1 },
+  });
   expect(systemd.uninstall(intake, fakeEnv, f.sys)).toEqual({ removed: true });
   expect(f.mutations()).toEqual([
     `exec ${sc} disable --now tender-intake.timer`,
@@ -165,13 +191,26 @@ test("status on systemd < 251 (no --timestamp=unix) still reports state, without
     "ActiveState=active\nNextElapseUSecRealtime=Tue 2023-11-14 22:28:20 UTC\nLastTriggerUSec=Tue 2023-11-14 22:13:20 UTC\n",
   ].join("\n");
   const f = fakeSys(files(), { [`${show} --timestamp=unix`]: { code: 1 }, [show]: { out } });
-  expect(systemd.status(intake, fakeEnv, f.sys)).toMatchObject({ installed: true, active: true, lastExit: 3, lastRun: undefined, nextRun: undefined });
+  expect(systemd.status(intake, fakeEnv, f.sys)).toMatchObject({
+    installed: true,
+    active: true,
+    lastExit: 3,
+    lastRun: undefined,
+    nextRun: undefined,
+  });
 });
 
 test("dry-run install performs no mutations and logs them", () => {
-  const f = fakeSys({}, state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")));
+  const f = fakeSys(
+    {},
+    state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")),
+  );
   const log: string[] = [];
-  systemd.install(intake, fakeEnv, dryRunSys(f.sys, (l) => log.push(l)));
+  systemd.install(
+    intake,
+    fakeEnv,
+    dryRunSys(f.sys, (l) => log.push(l)),
+  );
   expect(f.mutations()).toEqual([]);
   expect(log).toEqual([
     `write ${dir}/tender-intake.service`,

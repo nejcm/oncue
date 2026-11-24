@@ -32,7 +32,8 @@ function timerLines(job: Job): string[] {
   if (s.kind === "calendar") return [...s.at.map((a) => `OnCalendar=${calendar(a)}`), ...persistent];
   if (s.kind !== "interval") return [];
   const n = s.minutes;
-  if (n % 60 === 0 && 24 % (n / 60) === 0) return [`OnCalendar=*-*-* ${n === 1440 ? "00" : `0/${n / 60}`}:00`, ...persistent];
+  if (n % 60 === 0 && 24 % (n / 60) === 0)
+    return [`OnCalendar=*-*-* ${n === 1440 ? "00" : `0/${n / 60}`}:00`, ...persistent];
   if (60 % n === 0) return [`OnCalendar=*:0/${n}`, ...persistent];
   return [`OnStartupSec=${n}min`, `OnUnitActiveSec=${n}min`];
 }
@@ -60,13 +61,24 @@ function render(job: Job, env: Env): Rendered {
   ];
   const files = [{ path: `${u}.service`, content: `${service.join("\n")}\n` }];
   if (s.kind !== "keepAlive") {
-    const timer = [marker(job), "[Unit]", desc, "", "[Timer]", ...timerLines(job), "", "[Install]", "WantedBy=timers.target"];
+    const timer = [
+      marker(job),
+      "[Unit]",
+      desc,
+      "",
+      "[Timer]",
+      ...timerLines(job),
+      "",
+      "[Install]",
+      "WantedBy=timers.target",
+    ];
     files.push({ path: `${u}.timer`, content: `${timer.join("\n")}\n` });
   }
   return { files, warnings: [] };
 }
 
-const systemctl = (sys: Sys, mutates: boolean, ...args: string[]) => sys.exec(["systemctl", "--user", ...args], { mutates });
+const systemctl = (sys: Sys, mutates: boolean, ...args: string[]) =>
+  sys.exec(["systemctl", "--user", ...args], { mutates });
 
 function mayFail(sys: Sys, ...args: string[]) {
   try {
@@ -77,7 +89,12 @@ function mayFail(sys: Sys, ...args: string[]) {
 }
 
 // --timestamp=unix needs systemd 251; older hosts still get status, without dates.
-function show(sys: Sys, units: string[], props: string[], unix = false): { blocks: Record<string, string>[]; native: string } {
+function show(
+  sys: Sys,
+  units: string[],
+  props: string[],
+  unix = false,
+): { blocks: Record<string, string>[]; native: string } {
   const args = ["show", ...units, "-p", props.join(",")];
   let native: string;
   try {
@@ -87,7 +104,12 @@ function show(sys: Sys, units: string[], props: string[], unix = false): { block
     native = systemctl(sys, false, ...args).out;
   }
   const blocks = native.split(/\n\n/).map((b) =>
-    Object.fromEntries(b.split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)])),
+    Object.fromEntries(
+      b
+        .split("\n")
+        .filter(Boolean)
+        .map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
+    ),
   );
   return { blocks, native };
 }
@@ -98,7 +120,9 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   const r = render(job, env);
   const u = posix.join(dir(env), unit(job));
   const timer = job.schedule.kind !== "keepAlive";
-  const [main, other] = timer ? [`${unit(job)}.timer`, `${unit(job)}.service`] : [`${unit(job)}.service`, `${unit(job)}.timer`];
+  const [main, other] = timer
+    ? [`${unit(job)}.timer`, `${unit(job)}.service`]
+    : [`${unit(job)}.service`, `${unit(job)}.timer`];
   const ref = `${job.namespace}/${job.name}`;
   const pending = r.files.filter((f) => {
     const cur = sys.read(f.path);
@@ -107,7 +131,8 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
     return cur !== f.content;
   });
   const timerOwner = timer ? undefined : owner(sys.read(`${u}.timer`));
-  if (timerOwner && timerOwner !== ref) throw new OnCueError("INVALID_SPEC", `${u}.timer belongs to oncue job ${timerOwner}`);
+  if (timerOwner && timerOwner !== ref)
+    throw new OnCueError("INVALID_SPEC", `${u}.timer belongs to oncue job ${timerOwner}`);
   const staleTimer = timerOwner === ref;
   const [m, o] = show(sys, [main, other], ["UnitFileState", "ActiveState"]).blocks;
   const enabled = m?.UnitFileState === "enabled";
@@ -138,7 +163,8 @@ function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
   const files = owned(ref, env, sys);
   if (files.length === 0) return { removed: false };
   const foreign = files.find((f) => !f.mine);
-  if (foreign) throw new OnCueError("INVALID_SPEC", `${foreign.path} is not managed by oncue as ${ref.namespace}/${ref.name}`);
+  if (foreign)
+    throw new OnCueError("INVALID_SPEC", `${foreign.path} is not managed by oncue as ${ref.namespace}/${ref.name}`);
   const u = unit(ref);
   if (files.some((f) => f.path.endsWith(".timer"))) {
     mayFail(sys, "disable", "--now", `${u}.timer`);
@@ -155,7 +181,9 @@ function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
 function lingerWarning(env: Env, sys: Sys): string[] {
   if (env.uid === undefined) return [];
   try {
-    const out = sys.exec(["loginctl", "show-user", String(env.uid), "-p", "Linger", "--value"], { mutates: false }).out.trim();
+    const out = sys
+      .exec(["loginctl", "show-user", String(env.uid), "-p", "Linger", "--value"], { mutates: false })
+      .out.trim();
     return out === "no" ? ["linger is off: jobs stop at logout (loginctl enable-linger)"] : [];
   } catch {
     return [];
@@ -168,11 +196,21 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   if (files.length === 0) return { installed: false, active: false, warnings, native: "" };
   const u = unit(ref);
   const timer = files.some((f) => f.path.endsWith(".timer"));
-  const props = ["LoadState", "ActiveState", "SubState", "Result", "ExecMainStatus", "ExecMainStartTimestamp", "ExecMainExitTimestamp"];
-  const { blocks, native } = show(sys, timer ? [`${u}.service`, `${u}.timer`] : [`${u}.service`], [
-    ...props,
-    ...(timer ? ["NextElapseUSecRealtime", "LastTriggerUSec"] : []),
-  ], true);
+  const props = [
+    "LoadState",
+    "ActiveState",
+    "SubState",
+    "Result",
+    "ExecMainStatus",
+    "ExecMainStartTimestamp",
+    "ExecMainExitTimestamp",
+  ];
+  const { blocks, native } = show(
+    sys,
+    timer ? [`${u}.service`, `${u}.timer`] : [`${u}.service`],
+    [...props, ...(timer ? ["NextElapseUSecRealtime", "LastTriggerUSec"] : [])],
+    true,
+  );
   const svc = blocks[0] ?? {};
   const tmr = timer ? (blocks[1] ?? {}) : undefined;
   return {
@@ -194,7 +232,7 @@ function list(namespace: string, env: Env, sys: Sys): string[] {
       const m = sys.read(posix.join(dir(env), f))?.match(MARKER);
       return m && m[1] === namespace && f === `${namespace}-${m[2]}.service` ? [m[2]!] : [];
     })
-    .sort();
+    .toSorted();
 }
 
 export const systemd: Backend = {

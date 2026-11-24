@@ -13,7 +13,13 @@ const USAGE = `usage:
   oncue list <namespace> [--backend id]
   oncue render <spec.json|-> [--backend id]`;
 
-const EXIT: Record<ErrorCode, number> = { INVALID_SPEC: 2, UNSUPPORTED: 2, NO_BACKEND: 3, NOT_FOUND: 3, COMMAND_FAILED: 4 };
+const EXIT: Record<ErrorCode, number> = {
+  INVALID_SPEC: 2,
+  UNSUPPORTED: 2,
+  NO_BACKEND: 3,
+  NOT_FOUND: 3,
+  COMMAND_FAILED: 4,
+};
 
 const COMMANDS: Record<string, { args: [number, number]; flags: string[] }> = {
   install: { args: [1, 1], flags: ["backend", "capture-path", "dry-run"] },
@@ -25,7 +31,13 @@ const COMMANDS: Record<string, { args: [number, number]; flags: string[] }> = {
 
 class UsageError extends Error {}
 
-export type Io = { sys?: Sys; env?: Env; stdout?: (s: string) => void; stderr?: (s: string) => void; stdin?: () => string };
+export type Io = {
+  sys?: Sys;
+  env?: Env;
+  stdout?: (s: string) => void;
+  stderr?: (s: string) => void;
+  stdin?: () => string;
+};
 
 function readSpec(arg: string, stdin: () => string): unknown {
   let text: string;
@@ -57,7 +69,12 @@ export function main(argv: string[], io: Io = {}): number {
       parsed = parseArgs({
         args: argv,
         allowPositionals: true,
-        options: { backend: { type: "string" }, "capture-path": { type: "string" }, "dry-run": { type: "boolean" }, json: { type: "boolean" } },
+        options: {
+          backend: { type: "string" },
+          "capture-path": { type: "string" },
+          "dry-run": { type: "boolean" },
+          json: { type: "boolean" },
+        },
       });
     } catch (e) {
       throw new UsageError((e as Error).message);
@@ -66,7 +83,8 @@ export function main(argv: string[], io: Io = {}): number {
     const [cmd = "", ...args] = positionals;
     const spec = Object.hasOwn(COMMANDS, cmd) ? COMMANDS[cmd] : undefined;
     if (!spec) throw new UsageError(cmd ? `unknown command ${cmd}` : "missing command");
-    if (args.length < spec.args[0] || args.length > spec.args[1]) throw new UsageError(`wrong number of arguments for ${cmd}`);
+    if (args.length < spec.args[0] || args.length > spec.args[1])
+      throw new UsageError(`wrong number of arguments for ${cmd}`);
     const bad = Object.keys(v).find((f) => !spec.flags.includes(f));
     if (bad) throw new UsageError(`--${bad} does not apply to ${cmd}`);
 
@@ -84,23 +102,33 @@ export function main(argv: string[], io: Io = {}): number {
       }
       case "install": {
         let job = readSpec(a, stdin);
-        if (v["capture-path"] !== undefined) job = withPath(job, v["capture-path"], io.env?.platform ?? process.platform);
+        if (v["capture-path"] !== undefined)
+          job = withPath(job, v["capture-path"], io.env?.platform ?? process.platform);
         const r = install(job, o);
         warn(r.warnings);
         out(r.changed ? (v["dry-run"] ? "would install" : "installed") : "unchanged");
         break;
       }
       case "uninstall":
-        out(uninstall({ namespace: a, name: b ?? "" }, o).removed ? (v["dry-run"] ? "would remove" : "removed") : "not installed");
+        out(
+          uninstall({ namespace: a, name: b ?? "" }, o).removed
+            ? v["dry-run"]
+              ? "would remove"
+              : "removed"
+            : "not installed",
+        );
         break;
       case "status": {
         const names = b === undefined ? list(a, o) : [b];
         const all = names.map((name) => ({ name, ...status({ namespace: a, name }, o) }));
         if (v.json) out(JSON.stringify(b === undefined ? all : all[0], null, 2));
-        else for (const s of all) {
-          out(`${s.name}: ${s.installed ? (s.active ? "active" : "inactive") : "not installed"}${s.lastExit === undefined ? "" : `, last exit ${s.lastExit}`}${s.nextRun ? `, next ${s.nextRun.toISOString()}` : ""}`);
-          warn(s.warnings);
-        }
+        else
+          for (const s of all) {
+            out(
+              `${s.name}: ${s.installed ? (s.active ? "active" : "inactive") : "not installed"}${s.lastExit === undefined ? "" : `, last exit ${s.lastExit}`}${s.nextRun ? `, next ${s.nextRun.toISOString()}` : ""}`,
+            );
+            warn(s.warnings);
+          }
         break;
       }
       case "list":

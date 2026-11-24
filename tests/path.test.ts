@@ -73,7 +73,9 @@ posixOnly("capturePath: tool dirs then defaults, deduplicated", () => {
     `${a}:${b}:/usr/local/bin:/usr/bin:/bin`,
   );
   expect(capturePath(["tool"], [a, "/bin"], { PATH, platform: "linux" })).toBe(`${a}:/bin`);
-  expect(capturePath([], undefined, { PATH, platform: "darwin" })).toBe("/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin");
+  expect(capturePath([], undefined, { PATH, platform: "darwin" })).toBe(
+    "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+  );
 });
 
 test("capturePath: windows joins with ; and has no defaults", () => {

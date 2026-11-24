@@ -126,8 +126,13 @@ Integration tests for all three exist under `tests/integration/` and run with `O
 ## Development
 
 ```sh
-bun install
-bun run typecheck
-bun test
+bun install --frozen-lockfile
+bun run verify                          # typecheck, oxlint, oxfmt check, tests, knip
 ONCUE_IT=1 bun test tests/integration   # touches the real scheduler under a throwaway namespace
 ```
+
+`bun run format` applies oxfmt. Commands and constraints for contributors are in [AGENTS.md](AGENTS.md); remaining work is in [TODO.md](TODO.md).
+
+## License
+
+[MIT](LICENSE)

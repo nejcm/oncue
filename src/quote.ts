@@ -1,7 +1,9 @@
 import { OnCueError } from "./errors.ts";
 
 // XML 1.0 also forbids U+FFFE/U+FFFF and lone surrogates; no definition format wants raw control chars.
-const FORBIDDEN = /[\u0000-\u001f\u007f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+const FORBIDDEN =
+  // oxlint-disable-next-line no-control-regex
+  /[\u0000-\u001f\u007f\ufffe\uffff]|[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
 
 function clean(s: string): string {
   if (FORBIDDEN.test(s)) throw new OnCueError("INVALID_SPEC", `control or non-XML character in ${JSON.stringify(s)}`);

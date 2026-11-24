@@ -28,12 +28,14 @@ export function which(
   const windows = PATHEXT !== "";
   const exts = windows ? PATHEXT.split(";").filter(Boolean) : [];
   // Windows only runs extensionless names via PATHEXT; npm drops extensionless sh shims next to .cmd files.
-  const names = !windows || exts.some((e) => e.toLowerCase() === extname(cmd).toLowerCase()) ? [cmd] : exts.map((e) => cmd + e);
+  const names =
+    !windows || exts.some((e) => e.toLowerCase() === extname(cmd).toLowerCase()) ? [cmd] : exts.map((e) => cmd + e);
   const dirs = isAbsolute(cmd) ? [""] : PATH.split(windows ? ";" : ":").filter(Boolean);
-  for (const d of dirs) for (const n of names) {
-    const p = d ? join(d, n) : n;
-    if (runnable(p, windows)) return p;
-  }
+  for (const d of dirs)
+    for (const n of names) {
+      const p = d ? join(d, n) : n;
+      if (runnable(p, windows)) return p;
+    }
   return undefined;
 }
 
@@ -41,7 +43,11 @@ export function which(
 export function capturePath(
   tools: string[],
   defaults?: string[],
-  { PATH = process.env.PATH ?? "", PATHEXT, platform = process.platform }: { PATH?: string; PATHEXT?: string; platform?: NodeJS.Platform } = {},
+  {
+    PATH = process.env.PATH ?? "",
+    PATHEXT,
+    platform = process.platform,
+  }: { PATH?: string; PATHEXT?: string; platform?: NodeJS.Platform } = {},
 ): string {
   const windows = platform === "win32";
   const ext = windows ? (PATHEXT ?? process.env.PATHEXT ?? WIN_PATHEXT) : "";

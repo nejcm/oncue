@@ -5,14 +5,26 @@ import type { Job } from "./types.ts";
 const NAME = /^[a-z0-9][a-z0-9-]{0,30}$/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
-const JOB_KEYS = ["namespace", "name", "description", "command", "cwd", "env", "log", "schedule", "catchUp", "leaveChildrenOnStop"];
+const JOB_KEYS = [
+  "namespace",
+  "name",
+  "description",
+  "command",
+  "cwd",
+  "env",
+  "log",
+  "schedule",
+  "catchUp",
+  "leaveChildrenOnStop",
+];
 
 const fail = (msg: string): never => {
   throw new OnCueError("INVALID_SPEC", msg);
 };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const isAbs = (p: string) => posix.isAbsolute(p) || win32.isAbsolute(p);
-const isInt = (v: unknown, min: number, max: number) => Number.isInteger(v) && (v as number) >= min && (v as number) <= max;
+const isInt = (v: unknown, min: number, max: number) =>
+  Number.isInteger(v) && (v as number) >= min && (v as number) <= max;
 
 function onlyKeys(o: Record<string, unknown>, allowed: string[], where: string) {
   for (const k of Object.keys(o)) if (!allowed.includes(k)) fail(`unknown field ${where}${k}`);
@@ -71,7 +83,8 @@ export function validateJob(input: unknown, opts: { install?: boolean } = {}): J
       if (!isInt(a.minute, 0, 59)) fail(`${where}.minute must be an integer 0..59`);
       optInt(a, "hour", 0, 23, where);
       optInt(a, "day", 1, 31, where);
-      if (a.weekday !== undefined && !WEEKDAYS.includes(a.weekday as string)) fail(`${where}.weekday must be one of ${WEEKDAYS}`);
+      if (a.weekday !== undefined && !WEEKDAYS.includes(a.weekday as string))
+        fail(`${where}.weekday must be one of ${WEEKDAYS}`);
       // cron ORs weekday and day-of-month, systemd ANDs them.
       if (a.weekday !== undefined && a.day !== undefined) fail(`${where}: weekday and day cannot be combined`);
     });

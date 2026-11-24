@@ -6,7 +6,9 @@ import type { Sys } from "./types.ts";
 
 /** Text of file bytes: UTF-16LE when they start with its BOM (kept as U+FEFF), else UTF-8. */
 export const decode = (data: string | Uint8Array): string =>
-  typeof data === "string" ? data : Buffer.from(data).toString(data[0] === 0xff && data[1] === 0xfe ? "utf16le" : "utf8");
+  typeof data === "string"
+    ? data
+    : Buffer.from(data).toString(data[0] === 0xff && data[1] === 0xfe ? "utf16le" : "utf8");
 
 const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === "ENOENT";
 

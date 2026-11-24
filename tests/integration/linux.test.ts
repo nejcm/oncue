@@ -14,9 +14,12 @@ const enabled = process.env.ONCUE_IT === "1" && process.platform === "linux";
 
 describe.skipIf(!enabled)("systemd on this host", () => {
   test("systemd-analyze calendar accepts every rendered OnCalendar", () => {
-    const exprs = CASES.flatMap((j) => systemd.render(j, fakeEnv).files.flatMap((f) => String(f.content).match(/^OnCalendar=.*$/gm) ?? []));
+    const exprs = CASES.flatMap((j) =>
+      systemd.render(j, fakeEnv).files.flatMap((f) => String(f.content).match(/^OnCalendar=.*$/gm) ?? []),
+    );
     expect(exprs).toContain("OnCalendar=*:0/15");
-    for (const e of new Set(exprs)) expect(run(["systemd-analyze", "calendar", e.slice("OnCalendar=".length)])).toMatchObject({ code: 0 });
+    for (const e of new Set(exprs))
+      expect(run(["systemd-analyze", "calendar", e.slice("OnCalendar=".length)])).toMatchObject({ code: 0 });
   });
 
   test("systemd-analyze --user verify accepts every rendered unit", () => {
@@ -55,7 +58,13 @@ describe.skipIf(!enabled)("systemd on this host", () => {
   const live = enabled && systemd.available(realSys, fakeEnv);
   const ns = `oncue-it-${process.pid}`;
   const unitDir = join(homedir(), ".config/systemd/user");
-  const job = (name: string, schedule: Job["schedule"], command: Job["command"]): Job => ({ namespace: ns, name, command, cwd: tmpdir(), schedule });
+  const job = (name: string, schedule: Job["schedule"], command: Job["command"]): Job => ({
+    namespace: ns,
+    name,
+    command,
+    cwd: tmpdir(),
+    schedule,
+  });
   const timer = job("tick", { kind: "interval", minutes: 15 }, ["true"]);
   const daemon = job("daemon", { kind: "keepAlive", restart: "on-failure", delaySeconds: 5 }, ["sleep", "600"]);
 
@@ -84,7 +93,13 @@ describe.skipIf(!enabled)("systemd on this host", () => {
     expect(uninstall(daemon)).toEqual({ removed: true });
     expect(uninstall(daemon)).toEqual({ removed: false });
     expect(list(ns)).toEqual([]);
-    for (const f of [`${ns}-tick.service`, `${ns}-tick.timer`, `${ns}-daemon.service`, `default.target.wants/${ns}-daemon.service`, `timers.target.wants/${ns}-tick.timer`]) {
+    for (const f of [
+      `${ns}-tick.service`,
+      `${ns}-tick.timer`,
+      `${ns}-daemon.service`,
+      `default.target.wants/${ns}-daemon.service`,
+      `timers.target.wants/${ns}-tick.timer`,
+    ]) {
       expect(existsSync(join(unitDir, f))).toBe(false);
     }
     expect(status(daemon)).toMatchObject({ installed: false, active: false });

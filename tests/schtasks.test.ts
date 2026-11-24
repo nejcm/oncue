@@ -8,12 +8,26 @@ import type { ExecResult } from "../src/types.ts";
 import { CASES, windows } from "./cases.ts";
 import { fakeEnv, fakeSys } from "./fakes.ts";
 
-const [run, intake, , hostile] = CASES.map(windows) as [(typeof CASES)[number], (typeof CASES)[number], unknown, (typeof CASES)[number]];
+const [run, intake, , hostile] = CASES.map(windows) as [
+  (typeof CASES)[number],
+  (typeof CASES)[number],
+  unknown,
+  (typeof CASES)[number],
+];
 const dir = "C:\\Users\\u\\AppData\\Local\\oncue\\tender";
 const ps1 = `${dir}\\intake.ps1`;
 const xml = `${dir}\\intake.xml`;
-const ours = (name: string, extra = {}) => ({ Name: name, Source: `managed-by oncue tender/${name}`, State: "Ready", LastRun: null, LastResult: null, NextRun: null, ...extra });
-const files = (job = intake) => Object.fromEntries(ts.render(job, fakeEnv).files.map((f) => [f.path, decode(f.content)]));
+const ours = (name: string, extra = {}) => ({
+  Name: name,
+  Source: `managed-by oncue tender/${name}`,
+  State: "Ready",
+  LastRun: null,
+  LastResult: null,
+  NextRun: null,
+  ...extra,
+});
+const files = (job = intake) =>
+  Object.fromEntries(ts.render(job, fakeEnv).files.map((f) => [f.path, decode(f.content)]));
 const code = (f: () => unknown) => {
   try {
     f();
@@ -36,15 +50,21 @@ function fake(fs: Record<string, string> = {}, tasks: object[] = [], canned: Rec
 
 test("rendered Task XML is UTF-16LE with a BOM and decodes to the UTF-8 golden", () => {
   const bytes = ts.render(intake, fakeEnv).files[1]!.content as Uint8Array;
-  expect([...bytes.slice(0, 4)]).toEqual([0xff, 0xfe, 0x3c, 0x00]);
-  expect(Buffer.from(bytes.slice(2)).toString("utf16le")).toBe(readFileSync(join(import.meta.dir, "golden/schtasks/intake.xml"), "utf8"));
+  expect(Array.from(bytes.subarray(0, 4))).toEqual([0xff, 0xfe, 0x3c, 0x00]);
+  expect(Buffer.from(bytes.slice(2)).toString("utf16le")).toBe(
+    readFileSync(join(import.meta.dir, "golden/schtasks/intake.xml"), "utf8"),
+  );
   expect(ts.render(intake, fakeEnv).files[0]!.content).toStartWith("\ufeff# managed-by oncue tender/intake\n");
 });
 
 test("first install writes both files and creates the task from the XML", () => {
   const f = fake();
   expect(ts.install(intake, fakeEnv, f.sys).changed).toBe(true);
-  expect(f.mutations()).toEqual([`write ${ps1}`, `write ${xml}`, `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`]);
+  expect(f.mutations()).toEqual([
+    `write ${ps1}`,
+    `write ${xml}`,
+    `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`,
+  ]);
 });
 
 test("unchanged and registered re-install makes zero mutations", () => {
@@ -96,9 +116,14 @@ test("changed keepAlive re-install writes, re-creates, ends (tolerating failure)
 
 test("switching keepAlive to a timer ends the running instance", () => {
   const old = files(run);
-  const f = fake({ [ps1]: old[`${dir}\\run.ps1`]!, [xml]: old[`${dir}\\run.xml`]! }, [ours("intake", { State: "Running" })]);
+  const f = fake({ [ps1]: old[`${dir}\\run.ps1`]!, [xml]: old[`${dir}\\run.xml`]! }, [
+    ours("intake", { State: "Running" }),
+  ]);
   ts.install(intake, fakeEnv, f.sys);
-  expect(f.mutations().slice(-2)).toEqual([`exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`, "exec schtasks.exe /end /tn \\tender\\intake"]);
+  expect(f.mutations().slice(-2)).toEqual([
+    `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`,
+    "exec schtasks.exe /end /tn \\tender\\intake",
+  ]);
 });
 
 test("install over an unmarked task overwrites it; over another job's marker refuses", () => {
@@ -112,7 +137,12 @@ test("install over an unmarked task overwrites it; over another job's marker ref
 test("uninstall ends, deletes and removes files; missing is a no-op, unmarked or foreign is refused", () => {
   const f = fake(files(), [ours("intake")], { "schtasks.exe /end /tn \\tender\\intake": { code: 1 } });
   expect(ts.uninstall(intake, fakeEnv, f.sys)).toEqual({ removed: true });
-  expect(f.mutations()).toEqual(["exec schtasks.exe /end /tn \\tender\\intake", "exec schtasks.exe /delete /tn \\tender\\intake /f", `remove ${ps1}`, `remove ${xml}`]);
+  expect(f.mutations()).toEqual([
+    "exec schtasks.exe /end /tn \\tender\\intake",
+    "exec schtasks.exe /delete /tn \\tender\\intake /f",
+    `remove ${ps1}`,
+    `remove ${xml}`,
+  ]);
   const none = fake();
   expect(ts.uninstall(intake, fakeEnv, none.sys)).toEqual({ removed: false });
   expect(none.mutations()).toEqual([]);
@@ -127,7 +157,12 @@ test("uninstall ends, deletes and removes files; missing is a no-op, unmarked or
 });
 
 test("list and status query only the validated namespace and match on the marker", () => {
-  const f = fake({}, [ours("prs"), ours("intake"), { ...ours("manual"), Source: null }, { ...ours("x"), Source: "managed-by oncue tender/y" }]);
+  const f = fake({}, [
+    ours("prs"),
+    ours("intake"),
+    { ...ours("manual"), Source: null },
+    { ...ours("x"), Source: "managed-by oncue tender/y" },
+  ]);
   expect(ts.list("tender", fakeEnv, f.sys)).toEqual(["intake", "prs"]);
   expect(f.queries[0]!.slice(0, 4)).toEqual(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command"]);
   expect(f.queries[0]![4]).toContain("Get-ScheduledTask -TaskPath '\\tender\\'");
@@ -147,19 +182,33 @@ test("status maps Get-ScheduledTask output", () => {
     native: JSON.stringify([t]),
   });
   const never = fake(files(), [ours("intake", { LastRun: 943920000, LastResult: 267011 })]);
-  expect(ts.status(intake, fakeEnv, never.sys)).toMatchObject({ installed: true, lastExit: undefined, lastRun: undefined });
+  expect(ts.status(intake, fakeEnv, never.sys)).toMatchObject({
+    installed: true,
+    lastExit: undefined,
+    lastRun: undefined,
+  });
   const daemon = (State: string) => ts.status(run, fakeEnv, fake(files(run), [ours("run", { State })]).sys).active;
   expect([daemon("Running"), daemon("Ready")]).toEqual([true, false]);
-  expect(ts.status(intake, fakeEnv, fake(files(), [{ ...ours("intake"), Source: null }]).sys)).toMatchObject({ installed: false });
+  expect(ts.status(intake, fakeEnv, fake(files(), [{ ...ours("intake"), Source: null }]).sys)).toMatchObject({
+    installed: false,
+  });
   expect(ts.status(intake, fakeEnv, fake().sys)).toMatchObject({ installed: false, active: false });
 });
 
 test("dry-run install performs no mutations and logs them", () => {
   const f = fake();
   const log: string[] = [];
-  ts.install(intake, fakeEnv, dryRunSys(f.sys, (l) => log.push(l)));
+  ts.install(
+    intake,
+    fakeEnv,
+    dryRunSys(f.sys, (l) => log.push(l)),
+  );
   expect(f.mutations()).toEqual([]);
-  expect(log).toEqual([`write ${ps1}`, `write ${xml}`, `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`]);
+  expect(log).toEqual([
+    `write ${ps1}`,
+    `write ${xml}`,
+    `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`,
+  ]);
 });
 
 test("render rejects what Windows PowerShell or the task cannot hold", () => {
@@ -167,17 +216,26 @@ test("render rejects what Windows PowerShell or the task cannot hold", () => {
   for (const arg of ["", 'say "hi"', "C:\\dir with space\\"]) {
     expect(code(() => ts.render({ ...intake, command: ["C:\\x.exe", arg] }, fakeEnv))).toBe("UNSUPPORTED");
   }
-  for (const cwd of ["relative", "/home/u", "C:relative", "\\only-server"]) expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBe("INVALID_SPEC");
-  for (const cwd of ["C:\\x", "c:/x", "\\\\srv\\share\\x"]) expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBeUndefined();
+  for (const cwd of ["relative", "/home/u", "C:relative", "\\only-server"])
+    expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBe("INVALID_SPEC");
+  for (const cwd of ["C:\\x", "c:/x", "\\\\srv\\share\\x"])
+    expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBeUndefined();
   expect(code(() => ts.render({ ...intake, env: { "A;rm": "x" } }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => ts.render({ ...intake, command: ["C:\\x.exe", "a\u0001b"] }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => ts.render(run, { ...fakeEnv, user: undefined }))).toBe("NO_BACKEND");
   expect(code(() => ts.render(intake, { ...fakeEnv, localAppData: undefined }))).toBe("NO_BACKEND");
-  expect(decode(ts.render({ ...intake, catchUp: false }, fakeEnv).files[1]!.content)).toContain("<StartWhenAvailable>false</StartWhenAvailable>");
+  expect(decode(ts.render({ ...intake, catchUp: false }, fakeEnv).files[1]!.content)).toContain(
+    "<StartWhenAvailable>false</StartWhenAvailable>",
+  );
 });
 
 test("available follows whether schtasks.exe runs", () => {
   expect(ts.available(fakeSys().sys, fakeEnv)).toBe(true);
-  const missing = { ...fakeSys().sys, exec: () => { throw new OnCueError("NOT_FOUND", "schtasks.exe not found"); } };
+  const missing = {
+    ...fakeSys().sys,
+    exec: () => {
+      throw new OnCueError("NOT_FOUND", "schtasks.exe not found");
+    },
+  };
   expect(ts.available(missing, fakeEnv)).toBe(false);
 });

@@ -22,9 +22,17 @@ const shape = (name: string, schedule: Job["schedule"], extra: Partial<Job> = {}
 
 /** Render cases shared by every backend's goldens. */
 export const CASES: Job[] = [
-  tender("run", "tender: start agent sessions for ready tickets", { kind: "keepAlive", restart: "on-failure", delaySeconds: 30 }, { leaveChildrenOnStop: true }),
+  tender(
+    "run",
+    "tender: start agent sessions for ready tickets",
+    { kind: "keepAlive", restart: "on-failure", delaySeconds: 30 },
+    { leaveChildrenOnStop: true },
+  ),
   tender("intake", "tender: run the intake rules enabled for this host", { kind: "interval", minutes: 15 }),
-  tender("prs", "tender: close orphan agent PRs, report the rest", { kind: "calendar", at: [{ weekday: "mon", hour: 9, minute: 0 }] }),
+  tender("prs", "tender: close orphan agent PRs, report the rest", {
+    kind: "calendar",
+    at: [{ weekday: "mon", hour: 9, minute: 0 }],
+  }),
   {
     namespace: "hostile",
     name: "argv",
@@ -52,7 +60,19 @@ const HOSTILE_WIN: Job = {
   namespace: "hostile",
   name: "argv-win",
   description: "100% <odd> & \"quoted\" 'job' ünï",
-  command: ["C:\\Program Files\\my tools\\run.exe", "$env:HOME", "%PATH%", "it's", "\u2018curly\u2019", "a&b<c>d|e", "back\\slash", "ünïcödé ✓", "$(calc)", "`tick", "a b"],
+  command: [
+    "C:\\Program Files\\my tools\\run.exe",
+    "$env:HOME",
+    "%PATH%",
+    "it's",
+    "\u2018curly\u2019",
+    "a&b<c>d|e",
+    "back\\slash",
+    "ünïcödé ✓",
+    "$(calc)",
+    "`tick",
+    "a b",
+  ],
   cwd: "C:\\Users\\u\\dir with spaces\\100%",
   env: { A: "$x %i \"q\" 's' \\ & <> `n", EMPTY: "", UNI: "日本" },
   log: "C:\\Users\\u\\logs\\my job %.log",

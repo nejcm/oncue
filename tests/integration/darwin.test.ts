@@ -13,13 +13,21 @@ const goldens = join(import.meta.dir, "../golden/launchd");
 
 describe.skipIf(!enabled)("launchd on this host", () => {
   test("plutil -lint accepts every golden plist", () => {
-    const paths = readdirSync(goldens).filter((f) => f.endsWith(".plist")).map((f) => join(goldens, f));
+    const paths = readdirSync(goldens)
+      .filter((f) => f.endsWith(".plist"))
+      .map((f) => join(goldens, f));
     expect(paths.length).toBeGreaterThan(0);
     expect(realSys.exec(["plutil", "-lint", ...paths], { mutates: false, ok: [0, 1] })).toMatchObject({ code: 0 });
   });
 
   const ns = `oncue-it-${process.pid}`;
-  const job = (name: string, schedule: Job["schedule"], command: Job["command"]): Job => ({ namespace: ns, name, command, cwd: tmpdir(), schedule });
+  const job = (name: string, schedule: Job["schedule"], command: Job["command"]): Job => ({
+    namespace: ns,
+    name,
+    command,
+    cwd: tmpdir(),
+    schedule,
+  });
   const timer = job("tick", { kind: "interval", minutes: 15 }, ["true"]);
   const daemon = job("daemon", { kind: "keepAlive", restart: "on-failure", delaySeconds: 5 }, ["sleep", "600"]);
   const agents = join(homedir(), "Library/LaunchAgents");
@@ -42,7 +50,11 @@ describe.skipIf(!enabled)("launchd on this host", () => {
       expect(install(timer).changed).toBe(true);
     } catch (e) {
       // CI runners may have no gui/<uid> domain to bootstrap into.
-      if (e instanceof OnCueError && e.code === "COMMAND_FAILED" && /Domain does not support|Could not find domain/.test(e.message)) {
+      if (
+        e instanceof OnCueError &&
+        e.code === "COMMAND_FAILED" &&
+        /Domain does not support|Could not find domain/.test(e.message)
+      ) {
         console.warn(`skipped launchd round trip: ${e.message}`);
         return;
       }

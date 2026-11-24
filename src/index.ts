@@ -20,7 +20,9 @@ const hostEnv = (): Env => ({
   home: homedir(),
   uid: process.getuid?.(),
   localAppData: process.env.LOCALAPPDATA,
-  user: process.env.USERNAME && (process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME),
+  user:
+    process.env.USERNAME &&
+    (process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME),
 });
 
 function setup(o: Options) {
@@ -30,7 +32,10 @@ function setup(o: Options) {
   return { env, sys, backend };
 }
 
-const ref = (r: JobRef): JobRef => ({ namespace: validateName(r?.namespace, "namespace"), name: validateName(r?.name) });
+const ref = (r: JobRef): JobRef => ({
+  namespace: validateName(r?.namespace, "namespace"),
+  name: validateName(r?.name),
+});
 
 /** Validates `spec`, resolves command[0] on PATH, and installs or updates the job. */
 export function install(spec: unknown, o: Options = {}): { changed: boolean; warnings: string[] } {
@@ -54,11 +59,23 @@ export function render(spec: unknown, o: Pick<Options, "backend" | "env"> = {}):
   const job = validateJob(spec);
   const host = o.env ?? hostEnv();
   const backend =
-    typeof o.backend === "object" ? o.backend : BACKENDS.find((b) => (o.backend === undefined ? b.platforms.includes(host.platform) : b.id === o.backend));
-  if (!backend) throw new OnCueError("NO_BACKEND", o.backend === undefined ? `no scheduler for ${host.platform}` : `unknown backend ${JSON.stringify(o.backend)}`);
+    typeof o.backend === "object"
+      ? o.backend
+      : BACKENDS.find((b) => (o.backend === undefined ? b.platforms.includes(host.platform) : b.id === o.backend));
+  if (!backend)
+    throw new OnCueError(
+      "NO_BACKEND",
+      o.backend === undefined ? `no scheduler for ${host.platform}` : `unknown backend ${JSON.stringify(o.backend)}`,
+    );
   if (backend.platforms.includes(host.platform)) return backend.render(job, host);
   const r = backend.render(job, placeholderEnv(backend.platforms[0]!));
-  return { ...r, warnings: [...r.warnings, `rendered for ${backend.platforms.join("/")} on ${host.platform}: paths, uid and user are placeholders`] };
+  return {
+    ...r,
+    warnings: [
+      ...r.warnings,
+      `rendered for ${backend.platforms.join("/")} on ${host.platform}: paths, uid and user are placeholders`,
+    ],
+  };
 }
 
 export function uninstall(r: JobRef, o: Options = {}): { removed: boolean } {

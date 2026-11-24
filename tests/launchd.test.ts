@@ -9,7 +9,8 @@ const [run, intake] = CASES as [(typeof CASES)[number], (typeof CASES)[number]];
 const plist = "/home/u/Library/LaunchAgents/tender.intake.plist";
 const print = "launchctl print gui/501/tender.intake";
 const notLoaded = { [print]: { code: 113 } };
-const files = (job = intake) => Object.fromEntries(launchd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
+const files = (job = intake) =>
+  Object.fromEntries(launchd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
 const code = (f: () => unknown) => {
   try {
     f();
@@ -41,7 +42,11 @@ test("changed re-install writes, boots out (tolerating failure) and bootstraps",
   old[plist] = old[plist]!.replace("<integer>15</integer>", "<integer>20</integer>");
   const f = fakeSys(old, { "launchctl bootout gui/501/tender.intake": { code: 5 } });
   expect(launchd.install(intake, fakeEnv, f.sys).changed).toBe(true);
-  expect(f.mutations()).toEqual([`write ${plist}`, "exec launchctl bootout gui/501/tender.intake", `exec launchctl bootstrap gui/501 ${plist}`]);
+  expect(f.mutations()).toEqual([
+    `write ${plist}`,
+    "exec launchctl bootout gui/501/tender.intake",
+    `exec launchctl bootstrap gui/501 ${plist}`,
+  ]);
 });
 
 test("bootstrap failure is COMMAND_FAILED with a GUI-session hint", () => {
@@ -87,17 +92,30 @@ test("list matches on the marker, not the filename prefix", () => {
 test("status reads launchctl print best-effort", () => {
   const out = "gui/501/tender.run = {\n\tactive count = 1\n\tstate = running\n\tlast exit code = 3\n}\n";
   const f = fakeSys(files(run), { "launchctl print gui/501/tender.run": { out } });
-  expect(launchd.status(run, fakeEnv, f.sys)).toEqual({ installed: true, active: true, lastExit: 3, warnings: [], native: out });
+  expect(launchd.status(run, fakeEnv, f.sys)).toEqual({
+    installed: true,
+    active: true,
+    lastExit: 3,
+    warnings: [],
+    native: out,
+  });
   const stopped = fakeSys(files(run), { "launchctl print gui/501/tender.run": { out: "\tstate = not running\n" } });
   expect(launchd.status(run, fakeEnv, stopped.sys).active).toBe(false);
-  expect(launchd.status(intake, fakeEnv, fakeSys(files(), notLoaded).sys)).toMatchObject({ installed: true, active: false });
+  expect(launchd.status(intake, fakeEnv, fakeSys(files(), notLoaded).sys)).toMatchObject({
+    installed: true,
+    active: false,
+  });
   expect(launchd.status(intake, fakeEnv, fakeSys().sys)).toMatchObject({ installed: false, active: false });
 });
 
 test("dry-run install performs no mutations and logs them", () => {
   const f = fakeSys({}, notLoaded);
   const log: string[] = [];
-  launchd.install(intake, fakeEnv, dryRunSys(f.sys, (l) => log.push(l)));
+  launchd.install(
+    intake,
+    fakeEnv,
+    dryRunSys(f.sys, (l) => log.push(l)),
+  );
   expect(f.mutations()).toEqual([]);
   expect(log).toEqual([`write ${plist}`, `exec launchctl bootstrap gui/501 ${plist}`]);
 });
@@ -105,7 +123,12 @@ test("dry-run install performs no mutations and logs them", () => {
 test("available follows whether launchctl runs", () => {
   expect(launchd.available(fakeSys().sys, fakeEnv)).toBe(true);
   expect(launchd.available(fakeSys({}, { "launchctl version": { code: 1 } }).sys, fakeEnv)).toBe(true);
-  const missing = { ...fakeSys().sys, exec: () => { throw new OnCueError("NOT_FOUND", "launchctl not found"); } };
+  const missing = {
+    ...fakeSys().sys,
+    exec: () => {
+      throw new OnCueError("NOT_FOUND", "launchctl not found");
+    },
+  };
   expect(launchd.available(missing, fakeEnv)).toBe(false);
 });
 

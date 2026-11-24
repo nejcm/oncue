@@ -22,7 +22,9 @@ test("realSys write creates dirs, leaves no tmp file; missing read/readdir/remov
 
 test("realSys exec: ok codes, failures and missing binaries", () => {
   const node = process.execPath;
-  expect(realSys.exec([node, "-e", "process.stdin.pipe(process.stdout)"], { mutates: false, stdin: "hi" }).out).toBe("hi");
+  expect(realSys.exec([node, "-e", "process.stdin.pipe(process.stdout)"], { mutates: false, stdin: "hi" }).out).toBe(
+    "hi",
+  );
   expect(realSys.exec([node, "-e", "process.exit(3)"], { mutates: false, ok: [3] }).code).toBe(3);
   expect(() => realSys.exec([node, "-e", "process.exit(3)"], { mutates: false })).toThrow(OnCueError);
   let err: unknown;
@@ -44,7 +46,11 @@ test("dryRunSys logs mutations and passes reads through", () => {
   expect(sys.exec(["systemctl", "--user", "daemon-reload"], { mutates: true }).out).toBe("");
   expect(sys.exec(["systemctl", "--user", "show"], { mutates: false }).out).toBe("real");
   expect(calls).toEqual([["systemctl", "--user", "show"]]);
-  expect(log).toEqual([`write ${join(root, "dry")}`, `remove ${join(root, "dry")}`, "exec systemctl --user daemon-reload"]);
+  expect(log).toEqual([
+    `write ${join(root, "dry")}`,
+    `remove ${join(root, "dry")}`,
+    "exec systemctl --user daemon-reload",
+  ]);
   expect(sys.read(join(root, "dry"))).toBeUndefined();
 });
 

@@ -5,8 +5,29 @@ import { decode } from "../sys.ts";
 import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
 import { validateName } from "../validate.ts";
 
-const DAYS = { mon: "Monday", tue: "Tuesday", wed: "Wednesday", thu: "Thursday", fri: "Friday", sat: "Saturday", sun: "Sunday" };
-const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const DAYS = {
+  mon: "Monday",
+  tue: "Tuesday",
+  wed: "Wednesday",
+  thu: "Thursday",
+  fri: "Friday",
+  sat: "Saturday",
+  sun: "Sunday",
+};
+const MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+];
 const MARKER = /^managed-by oncue ([a-z0-9-]+)\/([a-z0-9-]+)$/;
 const ENV_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const EPOCH = "2000-01-01T00:00:00";
@@ -19,23 +40,31 @@ function dir(ref: JobRef, env: Env): string {
   if (!env.localAppData) throw new OnCueError("NO_BACKEND", "Task Scheduler backend needs %LOCALAPPDATA%");
   return win32.join(env.localAppData, "oncue", ref.namespace);
 }
-const paths = (ref: JobRef, env: Env) => ({ ps1: win32.join(dir(ref, env), `${ref.name}.ps1`), xml: win32.join(dir(ref, env), `${ref.name}.xml`) });
+const paths = (ref: JobRef, env: Env) => ({
+  ps1: win32.join(dir(ref, env), `${ref.name}.ps1`),
+  xml: win32.join(dir(ref, env), `${ref.name}.xml`),
+});
 
 function winPath(p: string, field: string): string {
-  if (!/^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(p)) throw new OnCueError("INVALID_SPEC", `${field} must be an absolute Windows path (drive or UNC) for Task Scheduler`);
+  if (!/^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(p))
+    throw new OnCueError("INVALID_SPEC", `${field} must be an absolute Windows path (drive or UNC) for Task Scheduler`);
   return p;
 }
 
 // Windows PowerShell 5.1 re-quotes native arguments itself and mangles these.
 function nativeArg(a: string): string {
   if (a === "" || a.includes('"') || (/\s/.test(a) && a.endsWith("\\"))) {
-    throw new OnCueError("UNSUPPORTED", `Task Scheduler: argument ${JSON.stringify(a)} cannot be passed through Windows PowerShell`);
+    throw new OnCueError(
+      "UNSUPPORTED",
+      `Task Scheduler: argument ${JSON.stringify(a)} cannot be passed through Windows PowerShell`,
+    );
   }
   return ps(a);
 }
 
 const el = (tag: string, body: string) => `<${tag}>${body}</${tag}>`;
-const repetition = (interval: string, duration?: string) => el("Repetition", el("Interval", interval) + (duration ? el("Duration", duration) : ""));
+const repetition = (interval: string, duration?: string) =>
+  el("Repetition", el("Interval", interval) + (duration ? el("Duration", duration) : ""));
 
 function calendarTrigger(a: CalendarAt): string {
   const start = el("StartBoundary", `2000-01-01T${pad(a.hour ?? 0)}:${pad(a.minute)}:00`);
@@ -44,7 +73,10 @@ function calendarTrigger(a: CalendarAt): string {
     a.weekday !== undefined
       ? el("ScheduleByWeek", el("DaysOfWeek", `<${DAYS[a.weekday]}/>`) + el("WeeksInterval", "1"))
       : a.day !== undefined
-        ? el("ScheduleByMonth", el("DaysOfMonth", el("Day", String(a.day))) + el("Months", MONTHS.map((m) => `<${m}/>`).join("")))
+        ? el(
+            "ScheduleByMonth",
+            el("DaysOfMonth", el("Day", String(a.day))) + el("Months", MONTHS.map((m) => `<${m}/>`).join("")),
+          )
         : el("ScheduleByDay", el("DaysInterval", "1"));
   return el("CalendarTrigger", hourly + start + by);
 }
@@ -53,11 +85,15 @@ function triggers(job: Job, env: Env): string[] {
   const s = job.schedule;
   if (s.kind === "calendar") return s.at.map(calendarTrigger);
   if (s.kind === "interval") return [el("TimeTrigger", repetition(`PT${s.minutes}M`) + el("StartBoundary", EPOCH))];
-  if (!env.user) throw new OnCueError("NO_BACKEND", "Task Scheduler keepAlive needs the user name for its logon trigger");
+  if (!env.user)
+    throw new OnCueError("NO_BACKEND", "Task Scheduler keepAlive needs the user name for its logon trigger");
   // A logon trigger without UserId means any user, which needs elevation.
   return [
     el("LogonTrigger", el("UserId", xml(env.user))),
-    el("TimeTrigger", repetition(`PT${Math.max(1, Math.ceil((s.delaySeconds ?? 0) / 60))}M`) + el("StartBoundary", EPOCH)),
+    el(
+      "TimeTrigger",
+      repetition(`PT${Math.max(1, Math.ceil((s.delaySeconds ?? 0) / 60))}M`) + el("StartBoundary", EPOCH),
+    ),
   ];
 }
 
@@ -83,7 +119,9 @@ function render(job: Job, env: Env): Rendered {
     el("DisallowStartIfOnBatteries", "false"),
     el("StopIfGoingOnBatteries", "false"),
     el("StartWhenAvailable", String(job.catchUp !== false)),
-    ...(keepAlive ? [el("ExecutionTimeLimit", "PT0S"), el("RestartOnFailure", el("Interval", "PT1M") + el("Count", "3"))] : []),
+    ...(keepAlive
+      ? [el("ExecutionTimeLimit", "PT0S"), el("RestartOnFailure", el("Interval", "PT1M") + el("Count", "3"))]
+      : []),
     el("Enabled", "true"),
   ];
   const task = [
@@ -131,14 +169,23 @@ function mayFail(sys: Sys, ...args: string[]) {
   }
 }
 
-type Task = { Name: string; Source: string | null; State: string; LastRun: number | null; LastResult: number | null; NextRun: number | null };
+type Task = {
+  Name: string;
+  Source: string | null;
+  State: string;
+  LastRun: number | null;
+  LastResult: number | null;
+  NextRun: number | null;
+};
 
 // Fixed script: only the validated namespace is interpolated.
 const query = (namespace: string) =>
   `$ErrorActionPreference = 'Stop'; ConvertTo-Json -Compress -InputObject @(Get-ScheduledTask -TaskPath '\\${validateName(namespace, "namespace")}\\' -ErrorAction SilentlyContinue | ForEach-Object { $i = $_ | Get-ScheduledTaskInfo; [pscustomobject]@{ Name = $_.TaskName; Source = $_.Source; State = [string]$_.State; LastRun = if ($i.LastRunTime) { ([DateTimeOffset]$i.LastRunTime).ToUnixTimeSeconds() }; LastResult = $i.LastTaskResult; NextRun = if ($i.NextRunTime) { ([DateTimeOffset]$i.NextRunTime).ToUnixTimeSeconds() } } })`;
 
 function tasks(namespace: string, sys: Sys): { tasks: Task[]; native: string } {
-  const native = sys.exec(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", query(namespace)], { mutates: false }).out;
+  const native = sys.exec(["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", query(namespace)], {
+    mutates: false,
+  }).out;
   return { tasks: native.trim() ? (JSON.parse(native) as Task[]) : [], native };
 }
 
@@ -178,7 +225,10 @@ function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
   const files = [p.ps1, p.xml].filter((f) => sys.read(f) !== undefined);
   if (!task && files.length === 0) return { removed: false };
   if (task && owner(task) !== `${ref.namespace}/${ref.name}`) {
-    throw new OnCueError("INVALID_SPEC", `task ${taskName(ref)} is not managed by oncue as ${ref.namespace}/${ref.name}`);
+    throw new OnCueError(
+      "INVALID_SPEC",
+      `task ${taskName(ref)} is not managed by oncue as ${ref.namespace}/${ref.name}`,
+    );
   }
   if (task) {
     mayFail(sys, "/end", "/tn", taskName(ref));
@@ -193,7 +243,8 @@ const unixDate = (s: number | null) => (s && s >= 946684800 ? new Date(s * 1000)
 
 function status(ref: JobRef, env: Env, sys: Sys): Status {
   const { task, native } = find(ref, sys);
-  if (!task || owner(task) !== `${ref.namespace}/${ref.name}`) return { installed: false, active: false, warnings: [], native: "" };
+  if (!task || owner(task) !== `${ref.namespace}/${ref.name}`)
+    return { installed: false, active: false, warnings: [], native: "" };
   const keepAlive = sys.read(paths(ref, env).xml)?.includes("<LogonTrigger>") ?? false;
   const lastRun = unixDate(task.LastRun);
   return {
@@ -211,7 +262,7 @@ function list(namespace: string, _env: Env, sys: Sys): string[] {
   return tasks(namespace, sys)
     .tasks.filter((t) => owner(t) === `${namespace}/${t.Name}`)
     .map((t) => t.Name)
-    .sort();
+    .toSorted();
 }
 
 export const taskScheduler: Backend = {

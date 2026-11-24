@@ -16,14 +16,26 @@ const spec = JSON.parse(readFileSync(intake, "utf8"));
 function run(argv: string[], sys: Sys = fakeSys().sys, stdin = "") {
   const out: string[] = [];
   const err: string[] = [];
-  const code = main(argv, { sys, env: fakeEnv, stdout: (s) => out.push(s), stderr: (s) => err.push(s), stdin: () => stdin });
+  const code = main(argv, {
+    sys,
+    env: fakeEnv,
+    stdout: (s) => out.push(s),
+    stderr: (s) => err.push(s),
+    stdin: () => stdin,
+  });
   return { code, out: out.join("\n"), err: err.join("\n") };
 }
 
 const raise = (e: unknown) => () => {
   throw e;
 };
-const throwing = (e: unknown): Sys => ({ read: raise(e), readdir: raise(e), write: raise(e), remove: raise(e), exec: raise(e) });
+const throwing = (e: unknown): Sys => ({
+  read: raise(e),
+  readdir: raise(e),
+  write: raise(e),
+  remove: raise(e),
+  exec: raise(e),
+});
 const untouchable = throwing(new Error("render touched sys"));
 
 describe("render", () => {
@@ -87,7 +99,7 @@ describe("dry-run", () => {
   test("--capture-path sets env.PATH", () => {
     const f = fakeSys();
     run(["install", "-", "--capture-path", "bun"], f.sys, JSON.stringify(job));
-    expect(f.fs.get("/home/u/.config/systemd/user/tender-intake.service")).toContain("Environment=\"PATH=");
+    expect(f.fs.get("/home/u/.config/systemd/user/tender-intake.service")).toContain('Environment="PATH=');
   });
 
   for (const env of ["bad", null, []]) {
@@ -131,7 +143,10 @@ describe("exit codes", () => {
   });
 
   test("COMMAND_FAILED", () => {
-    const r = run(["status", "tender", "intake", "--backend", "systemd"], throwing(new OnCueError("COMMAND_FAILED", "boom")));
+    const r = run(
+      ["status", "tender", "intake", "--backend", "systemd"],
+      throwing(new OnCueError("COMMAND_FAILED", "boom")),
+    );
     expect(r.code).toBe(4);
   });
 
@@ -153,7 +168,11 @@ test("bin: real spawn renders schtasks on this host and maps INVALID_SPEC to 2",
 
 test.skipIf(process.platform === "win32")("bin: a reader closing the pipe early exits quietly", () => {
   const cli = join(import.meta.dir, "../src/cli.ts");
-  const r = spawnSync("sh", ["-c", `"$0" "$1" render "$2" --backend schtasks | true`, process.execPath, cli, intakeWin], { encoding: "utf8" });
+  const r = spawnSync(
+    "sh",
+    ["-c", `"$0" "$1" render "$2" --backend schtasks | true`, process.execPath, cli, intakeWin],
+    { encoding: "utf8" },
+  );
   expect(r.status).toBe(0);
   expect(r.stderr).not.toContain("EPIPE");
 });

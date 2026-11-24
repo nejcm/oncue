@@ -9,49 +9,49 @@ const base = {
   cwd: "/home/u/tender",
   schedule: { kind: "interval", minutes: 15 },
 };
-const with_ = (patch: Record<string, unknown>) => ({ ...base, ...patch });
-const sched = (schedule: unknown) => with_({ schedule });
+const patched = (patch: Record<string, unknown>) => ({ ...base, ...patch });
+const sched = (schedule: unknown) => patched({ schedule });
 
 test("accepts tender's three jobs", () => {
   expect(validateJob(base, { install: true })).toEqual(base as never);
   validateJob(sched({ kind: "keepAlive", restart: "on-failure", delaySeconds: 30 }));
   validateJob(sched({ kind: "calendar", at: [{ weekday: "mon", hour: 9, minute: 0 }] }));
-  validateJob(with_({ cwd: "C:\\Users\\u\\tender", log: "native", env: { PATH: "/usr/bin" }, catchUp: false }));
+  validateJob(patched({ cwd: "C:\\Users\\u\\tender", log: "native", env: { PATH: "/usr/bin" }, catchUp: false }));
 });
 
 test("accepts relative command[0] outside install", () => {
-  validateJob(with_({ command: ["bun"] }));
+  validateJob(patched({ command: ["bun"] }));
 });
 
 const rejects: [string, unknown, { install?: boolean }?][] = [
   ["not an object", null],
   ["array", []],
-  ["unknown field", with_({ catchup: true })],
-  ["namespace missing", with_({ namespace: undefined })],
-  ["namespace uppercase", with_({ namespace: "Tender" })],
-  ["namespace leading dash", with_({ namespace: "-t" })],
-  ["namespace with slash", with_({ namespace: "a/b" })],
-  ["namespace with dot", with_({ namespace: "a.b" })],
-  ["name too long", with_({ name: "a".repeat(32) })],
-  ["name empty", with_({ name: "" })],
-  ["name with backslash", with_({ name: "a\\b" })],
-  ["description not string", with_({ description: 1 })],
-  ["command empty", with_({ command: [] })],
-  ["command not array", with_({ command: "bun tender.ts" })],
-  ["command non-string arg", with_({ command: ["/bin/sh", 1] })],
-  ["command[0] empty", with_({ command: [""] })],
-  ["command[0] relative on install", with_({ command: ["bun"] }), { install: true }],
-  ["cwd relative", with_({ cwd: "tender" })],
-  ["cwd missing", with_({ cwd: undefined })],
-  ["env not object", with_({ env: ["PATH"] })],
-  ["env key with =", with_({ env: { "A=B": "x" } })],
-  ["env key leading digit", with_({ env: { "1A": "x" } })],
-  ["env value not string", with_({ env: { A: 1 } })],
-  ["log relative", with_({ log: "out.log" })],
-  ["log not string", with_({ log: true })],
-  ["catchUp not boolean", with_({ catchUp: "yes" })],
-  ["leaveChildrenOnStop not boolean", with_({ leaveChildrenOnStop: 1 })],
-  ["schedule missing", with_({ schedule: undefined })],
+  ["unknown field", patched({ catchup: true })],
+  ["namespace missing", patched({ namespace: undefined })],
+  ["namespace uppercase", patched({ namespace: "Tender" })],
+  ["namespace leading dash", patched({ namespace: "-t" })],
+  ["namespace with slash", patched({ namespace: "a/b" })],
+  ["namespace with dot", patched({ namespace: "a.b" })],
+  ["name too long", patched({ name: "a".repeat(32) })],
+  ["name empty", patched({ name: "" })],
+  ["name with backslash", patched({ name: "a\\b" })],
+  ["description not string", patched({ description: 1 })],
+  ["command empty", patched({ command: [] })],
+  ["command not array", patched({ command: "bun tender.ts" })],
+  ["command non-string arg", patched({ command: ["/bin/sh", 1] })],
+  ["command[0] empty", patched({ command: [""] })],
+  ["command[0] relative on install", patched({ command: ["bun"] }), { install: true }],
+  ["cwd relative", patched({ cwd: "tender" })],
+  ["cwd missing", patched({ cwd: undefined })],
+  ["env not object", patched({ env: ["PATH"] })],
+  ["env key with =", patched({ env: { "A=B": "x" } })],
+  ["env key leading digit", patched({ env: { "1A": "x" } })],
+  ["env value not string", patched({ env: { A: 1 } })],
+  ["log relative", patched({ log: "out.log" })],
+  ["log not string", patched({ log: true })],
+  ["catchUp not boolean", patched({ catchUp: "yes" })],
+  ["leaveChildrenOnStop not boolean", patched({ leaveChildrenOnStop: 1 })],
+  ["schedule missing", patched({ schedule: undefined })],
   ["schedule unknown kind", sched({ kind: "cron", expr: "* * * * *" })],
   ["interval unknown key", sched({ kind: "interval", minutes: 15, every: 5 })],
   ["calendar unknown key", sched({ kind: "calendar", at: [{ minute: 0, hours: 9 }] })],
@@ -73,7 +73,7 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["calendar weekday + day", sched({ kind: "calendar", at: [{ minute: 0, weekday: "mon", day: 1 }] })],
   ["keepAlive bad restart", sched({ kind: "keepAlive", restart: "never" })],
   ["keepAlive negative delay", sched({ kind: "keepAlive", restart: "always", delaySeconds: -1 })],
-  ["keepAlive catchUp", with_({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: true })],
+  ["keepAlive catchUp", patched({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: true })],
 ];
 
 test.each(rejects)("rejects %s", (_, input, opts = {}) => {
