@@ -2,7 +2,7 @@
 
 | id | Platform | Talks to | Field-tested |
 |---|---|---|---|
-| `systemd` | linux | `systemctl --user`, `loginctl` | Yes: round trip on systemd 262 (`tests/integration/linux.test.ts`) |
+| `systemd` | linux | `systemctl --user`, `loginctl` | Yes: round trip and `leaveChildrenOnStop` on systemd 262 (`tests/integration/linux.test.ts`) |
 | `launchd` | darwin | `launchctl` | No: fake-system unit tests and goldens only |
 | `schtasks` | win32 | `schtasks.exe`, `powershell.exe` | No: fake-system unit tests and goldens only |
 
@@ -44,10 +44,10 @@ On Windows the task runs `powershell.exe -NoProfile -NonInteractive -ExecutionPo
 | timer job | `Type=oneshot` service + timer `WantedBy=timers.target` | | |
 | `delaySeconds` | `RestartSec=` | `ThrottleInterval` | repetition interval of the `TimeTrigger` |
 | `catchUp` (default on) | `Persistent=true` on `OnCalendar` timers | no key (see [catch-up](#catch-up)) | `StartWhenAvailable` |
-| `leaveChildrenOnStop` | `KillMode=process` | `AbandonProcessGroup` | ignored, with a warning |
+| `leaveChildrenOnStop` | `KillMode=process` (see [children](#children-on-stop)) | `AbandonProcessGroup` | ignored, with a warning |
 | overlap | no setting | no setting | `MultipleInstancesPolicy IgnoreNew` |
 
-Task Scheduler also sets `DisallowStartIfOnBatteries` and `StopIfGoingOnBatteries` to `false`, `LogonType InteractiveToken`, `RunLevel LeastPrivilege`.
+Task Scheduler also sets `DisallowStartIfOnBatteries` and `StopIfGoingOnBatteries` to `false`, `LogonType InteractiveToken`, `RunLevel LeastPrivilege`. The battery settings are explicit because the schema defaults would block or stop jobs on battery ([DisallowStartIfOnBatteries](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-disallowstartifonbatteries-settingstype-element) defaults to true; the [StopIfGoingOnBatteries](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-stopifgoingonbatteries-settingstype-element) page gives both `true` and `false`). `Priority` is left at its default 7, which starts the action below normal priority with low I/O priority ([Priority](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-priority-settingstype-element)).
 
 ## Behaviour differences
 
@@ -67,14 +67,14 @@ Aligned intervals (those dividing an hour, or a day in whole hours) fire on the 
 
 - systemd: `Persistent=true` is written for calendar jobs and aligned intervals unless `catchUp: false`. Unaligned intervals use monotonic timers, which have no catch-up; `catchUp` has no effect on them. An explicit `catchUp: true` warns; the default does not.
 - launchd: no setting is written. `StartCalendarInterval` runs a slot missed during sleep once on wake **[unverified]**, so `catchUp: false` is ignored with a warning. `StartInterval` (unaligned intervals) skips events missed during sleep **[unverified]**, so `catchUp: false` there needs no warning, and an explicit `catchUp: true` warns as on systemd. Behaviour after power-off is **[unverified]**.
-- Task Scheduler: `StartWhenAvailable` is `true` unless `catchUp: false`.
+- Task Scheduler: `StartWhenAvailable` is `true` unless `catchUp: false`. Microsoft documents it only for triggers with an end boundary or infinite repetition, and starts missed runs after a delay, 10 minutes by default ([StartWhenAvailable](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings-startwhenavailable)). `interval` triggers repeat without end; `calendar` triggers have neither, so their catch-up is **[unverified]**.
 
 ### keepAlive restarts
 
 - systemd: `Restart=` and `RestartSec=` as given.
 - launchd: `ThrottleInterval` is a minimum spacing between launches rather than a delay after exit **[unverified]**.
-- Task Scheduler cannot restart on exit code. The repeating `TimeTrigger` with `IgnoreNew` relaunches the task within one repetition interval after any exit, so `restart: "on-failure"` behaves as `"always"` (a warning says so). Whether `RestartOnFailure` reacts to non-zero exit codes or only to launch failures is **[unverified]**.
-- Task Scheduler stops tasks after its default execution time limit (72 hours) **[unverified]**. `keepAlive` jobs set `ExecutionTimeLimit PT0S` (no limit); `interval` and `calendar` jobs keep the default.
+- Task Scheduler cannot restart on exit code. The repeating `TimeTrigger` with `IgnoreNew` relaunches the task within one repetition interval after any exit (at least 1 minute: the schema's [minimum](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-interval-repetitiontype-element) is `PT1M`), so `restart: "on-failure"` behaves as `"always"` (a warning says so). Whether `RestartOnFailure` reacts to non-zero exit codes or only to launch failures is **[unverified]**.
+- Task Scheduler stops tasks after its default execution time limit of 72 hours ([TaskSettings](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings)). `keepAlive` jobs set `ExecutionTimeLimit PT0S` (no limit); `interval` and `calendar` jobs keep the default.
 
 ### Sessions and logout
 
@@ -82,7 +82,13 @@ All jobs are user jobs and need the user's session:
 
 - systemd: the user manager stops at logout unless lingering is enabled (`loginctl enable-linger`). `status` warns when `loginctl` reports `Linger=no`.
 - launchd: LaunchAgents are bootstrapped into `gui/<uid>`, which exists only for a logged-in GUI user. `bootstrap` over SSH without one fails with `COMMAND_FAILED` and a hint.
-- Task Scheduler: `InteractiveToken` tasks run only while the user is logged on **[unverified]**. A console window may flash on each run **[unverified]**. Group Policy may block `-ExecutionPolicy Bypass` **[unverified]**.
+- Task Scheduler: `InteractiveToken` tasks run only in an existing interactive session ([logonType](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-logontype-simpletype)).
+- Task Scheduler: a console window probably flashes on each run **[unverified]**. Windows creates the console before `powershell.exe` reads `-WindowStyle Hidden`, so that flag only shortens a flash ([PowerShell#3028](https://github.com/PowerShell/PowerShell/issues/3028), open). Windows can create a console process without a window ([`CREATE_NO_WINDOW`](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags)), but an `Exec` action has no setting for it; only a GUI-subsystem launcher in between could pass it. Not done: `conhost.exe --headless` is undocumented, VBScript is [deprecated](https://learn.microsoft.com/en-us/windows/whats-new/deprecated-features), and a `wscript.exe` JScript wrapper adds a second quoting layer.
+- Task Scheduler: a Group Policy execution policy ("Turn on Script Execution") takes precedence over `-ExecutionPolicy Bypass` ([about_Execution_Policies](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1)). The generated `.ps1` is local and unsigned, so `Unrestricted` and `RemoteSigned` still run it; `AllSigned` ("Allow only signed scripts") and `Restricted` (the setting disabled) block it. oncue does not try to get around it.
+
+### Children on stop
+
+systemd: with `KillMode=process`, stopping the service signals only the main process, and children stay running (`tests/integration/linux.test.ts`). tmux 3.7 and later, when built with systemd support (Arch, for example), moves each pane into a `tmux-spawn-*.scope` that is `PartOf=` the unit that started the tmux server ([source](https://github.com/tmux/tmux/blob/master/compat/systemd.c)). Stopping or restarting the job then stops those panes, and the tmux server exits with its last session; `KillMode=process` cannot prevent this. A job that should leave tmux sessions behind has to start the tmux server outside its own unit, for example with `systemd-run --user --scope tmux …`.
 
 ### Overlap
 
@@ -100,7 +106,7 @@ Every backend creates a missing directory for a custom `log` path before activat
 
 `uninstall` stops the job, removes its definition files and registration, and keeps logs. A failed stop or disable is tolerated, but a missing scheduler tool (`NOT_FOUND`) or host value (`NO_BACKEND`) aborts before anything is removed:
 
-- systemd: `disable --now` the timer and `stop` the service (or `disable --now` the `keepAlive` service), remove the units, `daemon-reload`, `reset-failed`.
+- systemd: `disable --now` the timer, `stop` the service and `clean --what=state` the timer (removes its `Persistent=` stamp, systemd 243+; per `systemd.timer(5)`), or `disable --now` the `keepAlive` service; then remove the units, `daemon-reload`, `reset-failed`.
 - launchd: `bootout`, remove the plist.
 - Task Scheduler: `/end`, `/delete /f`, remove the `.ps1` and `.xml`.
 
@@ -119,8 +125,40 @@ A definition at the job's path without a marker is overwritten by `install` but 
 
 systemd dates need `systemctl show --timestamp=unix` (systemd 251 or newer); on older versions `status` falls back to a plain `show`, and `lastRun` and `nextRun` are absent. `launchctl print` output is not a stable interface (per `launchctl(1)`), so launchd fields are best-effort.
 
+## CI hosts
+
+On GitHub-hosted runners both live round trips are expected to run, so `tests/integration` does not skip them when `CI` is set:
+
+- Ubuntu images enable linger for the runner user at image build ([systemd-linger.sh](https://github.com/actions/runner-images/blob/main/images/ubuntu/assets/post-gen/systemd-linger.sh)) and set `XDG_RUNTIME_DIR=/run/user/1001` in `/etc/environment` ([runner-images#14649](https://github.com/actions/runner-images/issues/14649)), so `systemctl --user` reaches the runner's user manager.
+- macOS images log the runner user into the GUI automatically ([configure-autologin.sh](https://github.com/actions/runner-images/blob/main/images/macos/scripts/build/configure-autologin.sh)), so `gui/<uid>` should exist. Locally the launchd round trip is skipped when `launchctl print gui/<uid>` fails (SSH without a GUI login, where `bootstrap` fails with `125: Domain does not support specified action`).
+
+Neither has been seen on a real CI run yet.
+
+## Manual checks
+
+All pending: none has been run. Each needs a real machine; use a throwaway namespace and `uninstall` afterwards. Record linger and Group Policy settings before changing them, and restore them after.
+
+| Check | Steps | Expected |
+|---|---|---|
+| systemd logout | `loginctl disable-linger`, install an `interval` job, log out of every session, wait one interval, log in | no run while logged out (journal); with linger on, runs continue |
+| systemd reboot | install a calendar job, reboot | `systemctl --user list-timers` shows it; a slot missed while off runs once after boot (`Persistent=true`) |
+| systemd sleep | install a calendar job, suspend across a slot, resume | one run right after resume |
+| launchd over SSH | with no GUI login, `ssh` in and `oncue install` | `COMMAND_FAILED` with the GUI-session hint |
+| launchd sleep | install a calendar job and an unaligned interval, sleep across a slot | calendar job runs once on wake; `StartInterval` job does not catch up |
+| launchd reboot / logout | install, log out and back in (then reboot) | job loaded again from `~/Library/LaunchAgents` (`launchctl print gui/<uid>/<label>`) |
+| Task Scheduler arguments | install `command: ["bun", "-e", "console.log(JSON.stringify(process.argv))", "a b", "it's", "ünï", "C:\\x\\"]`, `schtasks /run` it | the logged array ends with the four arguments unchanged |
+| Task Scheduler console | install a 1-minute `interval` job, watch the desktop for a few runs | record whether a console window appears |
+| Task Scheduler keepAlive | install `keepAlive` with a command that exits after 5 s | relaunched within about 1 minute (log timestamps) |
+| Task Scheduler sleep | install a 60-minute `interval` job; sleep from about :50 to :20 the next hour, then resume; read the log timestamps until the next :00; repeat with a calendar job at a fixed minute | interval: one run between resume and the next :00, possibly about 10 minutes after resume (a normal tick only lands on :00); calendar: record whether the missed slot runs at all |
+| Task Scheduler on battery | (a) unplugged, wait for a slot; (b) on AC, start a long-running job (`schtasks /run`), then unplug while it runs | (a) job starts; (b) job keeps running (`Running` in `status`, log keeps growing) |
+| Task Scheduler Group Policy | set "Turn on Script Execution" to signed scripts only, wait for a run | run fails; log has no new output and `LastTaskResult` is non-zero |
+
 ## Quoting
 
 - systemd: each `ExecStart` word is double-quoted with `\` and `"` escaped and `%` doubled; `$` is doubled in arguments but not in the program path (systemd does not unescape it there). `Environment=` values are quoted the same way, without `$` doubling. `WorkingDirectory=`, `Description=` and `append:` paths are unquoted with `%` doubled; spaces inside are fine (verified with `systemd-analyze verify`). A trailing `\` is rejected in all three; a trailing space is rejected in `WorkingDirectory=` and `append:` paths (`cwd`, `log`) only.
 - launchd: values are XML-escaped.
 - Task Scheduler: `.ps1` values are PowerShell single-quoted literals with `'` and the curly single quotes doubled; XML values are XML-escaped. Arguments Windows PowerShell 5.1 would mangle are rejected (see [character rules](spec.md#character-rules)).
+
+## Bun.cron
+
+Not used, and not a replacement for any backend. Bun's OS-level `Bun.cron(path, schedule, title)` runs a JavaScript module's `scheduled()` export, not an arbitrary command, and takes no `cwd`, `env`, log path or `keepAlive`. On Linux it writes a crontab line rather than systemd units, so there is no catch-up and no journal; on macOS logs go to the temp directory; there is no status or list API ([docs](https://bun.com/docs/runtime/cron), `Bun.cron` in `bun-types` 1.4.5). Using it would also tie the core to Bun instead of `node:` modules.

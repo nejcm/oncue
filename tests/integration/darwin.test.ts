@@ -3,7 +3,6 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { launchd } from "../../src/backends/launchd.ts";
-import { OnCueError } from "../../src/errors.ts";
 import { install, list, status, uninstall } from "../../src/index.ts";
 import { realSys } from "../../src/sys.ts";
 import type { Job } from "../../src/types.ts";
@@ -46,20 +45,13 @@ describe.skipIf(!enabled)("launchd on this host", () => {
 
   test("install, re-install, status, list, uninstall round trip", () => {
     expect(launchd.available(realSys, { platform: "darwin", home: homedir() })).toBe(true);
-    try {
-      expect(install(timer).changed).toBe(true);
-    } catch (e) {
-      // CI runners may have no gui/<uid> domain to bootstrap into.
-      if (
-        e instanceof OnCueError &&
-        e.code === "COMMAND_FAILED" &&
-        /Domain does not support|Could not find domain/.test(e.message)
-      ) {
-        console.warn(`skipped launchd round trip: ${e.message}`);
-        return;
-      }
-      throw e;
+    // SSH or headless sessions have no gui/<uid> domain; GitHub's macOS images auto-login, so CI never skips.
+    const gui = Bun.spawnSync(["launchctl", "print", `gui/${process.getuid!()}`]);
+    if (gui.exitCode !== 0 && !process.env.CI) {
+      console.warn(`skipped launchd round trip: no gui domain (${gui.stderr.toString().trim()})`);
+      return;
     }
+    expect(install(timer).changed).toBe(true);
     expect(install(daemon).changed).toBe(true);
     expect(install(timer).changed).toBe(false);
     expect(install(daemon).changed).toBe(false);
