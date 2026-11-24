@@ -7,7 +7,7 @@ oncue renders an OS-neutral job spec into native scheduler definitions (systemd 
 - Read README.md and CONTEXT.md before changing domain behavior.
 - [docs/spec.md](docs/spec.md) is the job spec contract, [docs/backends.md](docs/backends.md) the per-scheduler mapping and caveats, [docs/library.md](docs/library.md) the public API, [docs/cli.md](docs/cli.md) the CLI and exit codes.
 - `tests/golden/<backend>/` holds expected rendered output; `UPDATE_GOLDEN=1 bun test tests/render.test.ts` rewrites it. Review every golden diff by hand.
-- Remaining work is in TODO.md.
+- Remaining work is in TODO.md (local, gitignored).
 
 ## Constraints
 
