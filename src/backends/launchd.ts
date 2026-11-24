@@ -1,6 +1,7 @@
 import { posix } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { xml } from "../quote.ts";
+import { ensureLogDir } from "../sys.ts";
 import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
 
 const WEEKDAYS = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
@@ -67,6 +68,8 @@ function render(job: Job, env: Env): Rendered {
       ? posixPath(job.log, "log")
       : posix.join(env.home, "Library/Logs", `${job.namespace}-${job.name}.log`);
   const vars = Object.entries(job.env ?? {});
+  const schedule = scheduleKeys(job);
+  const startInterval = schedule.startsWith("<key>StartInterval</key>");
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
     '<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">',
@@ -80,14 +83,16 @@ function render(job: Job, env: Env): Rendered {
       : []),
     key("StandardOutPath", str(log)),
     key("StandardErrorPath", str(log)),
-    scheduleKeys(job),
+    schedule,
     ...(job.leaveChildrenOnStop ? [key("AbandonProcessGroup", "<true/>")] : []),
     "</dict></plist>",
   ];
   const warnings =
-    job.catchUp === false && job.schedule.kind !== "keepAlive"
+    job.catchUp === false && job.schedule.kind !== "keepAlive" && !startInterval
       ? ["launchd always runs a missed calendar slot on wake; catchUp: false is ignored"]
-      : [];
+      : job.catchUp === true && startInterval
+        ? ["launchd StartInterval (unaligned intervals) has no catch-up; catchUp: true is ignored"]
+        : [];
   return { files: [{ path: plistPath(job, env), content: `${lines.join("\n")}\n` }], warnings };
 }
 
@@ -106,7 +111,26 @@ function bootout(ref: JobRef, env: Env, sys: Sys) {
   try {
     launchctl(sys, true, "bootout", `${domain(env)}/${label(ref)}`);
   } catch (e) {
-    if (!(e instanceof OnCueError)) throw e;
+    if (!(e instanceof OnCueError) || e.code !== "COMMAND_FAILED") throw e;
+  }
+}
+
+const PAUSE = new Int32Array(new SharedArrayBuffer(4));
+
+// bootstrap right after bootout can fail with 5 (EIO) while the old instance is still being torn down.
+function bootstrap(path: string, env: Env, sys: Sys, retries: number) {
+  const argv = ["launchctl", "bootstrap", domain(env), path];
+  try {
+    for (let left = retries; sys.exec(argv, { mutates: true, ok: left > 0 ? [0, 5] : [0] }).code === 5; left--)
+      Atomics.wait(PAUSE, 0, 0, 500);
+  } catch (e) {
+    if (e instanceof OnCueError && e.code === "COMMAND_FAILED") {
+      throw new OnCueError(
+        "COMMAND_FAILED",
+        `${e.message} (LaunchAgents need a logged-in GUI session; over SSH there may be no ${domain(env)} domain)`,
+      );
+    }
+    throw e;
   }
 }
 
@@ -120,19 +144,10 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   const loaded = print(job, env, sys) !== undefined;
   if (cur === f.content && loaded) return { changed: false, warnings: r.warnings };
 
+  ensureLogDir(sys, job.log);
   if (cur !== f.content) sys.write(f.path, f.content);
   if (loaded) bootout(job, env, sys);
-  try {
-    launchctl(sys, true, "bootstrap", domain(env), f.path);
-  } catch (e) {
-    if (e instanceof OnCueError && e.code === "COMMAND_FAILED") {
-      throw new OnCueError(
-        "COMMAND_FAILED",
-        `${e.message} (LaunchAgents need a logged-in GUI session; over SSH there may be no ${domain(env)} domain)`,
-      );
-    }
-    throw e;
-  }
+  bootstrap(f.path, env, sys, loaded ? 4 : 0);
   return { changed: true, warnings: r.warnings };
 }
 

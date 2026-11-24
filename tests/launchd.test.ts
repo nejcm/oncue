@@ -139,3 +139,57 @@ test("render rejects what a plist cannot hold", () => {
   expect(code(() => launchd.render({ ...intake, name: "a--b" }, fakeEnv))).toBe("UNSUPPORTED");
   expect(launchd.render({ ...CASES[1]!, catchUp: false }, fakeEnv).warnings).toHaveLength(1);
 });
+
+test("uninstall without a uid fails before removing the plist", () => {
+  const f = fakeSys(files());
+  expect(code(() => launchd.uninstall(intake, { ...fakeEnv, uid: undefined }, f.sys))).toBe("NO_BACKEND");
+  expect(f.mutations()).toEqual([]);
+});
+
+test("catchUp warnings follow whether launchd can honor them", () => {
+  const unaligned = { ...intake, schedule: { kind: "interval" as const, minutes: 90 } };
+  expect(launchd.render({ ...unaligned, catchUp: false }, fakeEnv).warnings).toEqual([]);
+  expect(launchd.render({ ...unaligned, catchUp: true }, fakeEnv).warnings).toHaveLength(1);
+  expect(launchd.render(unaligned, fakeEnv).warnings).toEqual([]);
+});
+
+test("install creates the directory of a custom log", () => {
+  const log = "/home/u/logs/intake.log";
+  const f = fakeSys({}, notLoaded);
+  launchd.install({ ...intake, log }, fakeEnv, f.sys);
+  expect(f.mutations()[0]).toBe(`write ${log}`);
+  const existing = fakeSys({ "/home/u/logs/other.log": "" }, notLoaded);
+  launchd.install({ ...intake, log }, fakeEnv, existing.sys);
+  expect(existing.mutations()).not.toContain(`write ${log}`);
+});
+
+test("bootstrap after bootout retries a bounded number of times while launchd answers 5", () => {
+  const boot = `launchctl bootstrap gui/501 ${plist}`;
+  const changed = files();
+  changed[plist] = changed[plist]!.replace("<integer>15</integer>", "<integer>20</integer>");
+  const answering = (sys: ReturnType<typeof fakeSys>, answers: number[]) => {
+    const exec = sys.sys.exec;
+    let attempts = 0;
+    sys.sys.exec = (argv, o) => {
+      if (argv.join(" ") !== boot) return exec(argv, o);
+      const c = answers[Math.min(attempts++, answers.length - 1)]!;
+      if (!(o.ok ?? [0]).includes(c)) throw new OnCueError("COMMAND_FAILED", `${boot} exited ${c}`);
+      return { code: c, out: "", err: "" };
+    };
+    return () => attempts;
+  };
+  const settles = fakeSys(changed);
+  const settled = answering(settles, [5, 0]);
+  expect(launchd.install(intake, fakeEnv, settles.sys).changed).toBe(true);
+  expect(settled()).toBe(2);
+
+  const stuck = fakeSys(changed);
+  const tried = answering(stuck, [5]);
+  expect(() => launchd.install(intake, fakeEnv, stuck.sys)).toThrow(/exited 5.*GUI session/);
+  expect(tried()).toBe(5);
+
+  const first = fakeSys({}, notLoaded);
+  const once = answering(first, [5]);
+  expect(code(() => launchd.install(intake, fakeEnv, first.sys))).toBe("COMMAND_FAILED");
+  expect(once()).toBe(1);
+});

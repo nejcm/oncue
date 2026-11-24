@@ -1,7 +1,7 @@
 import { win32 } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { ps, xml } from "../quote.ts";
-import { decode } from "../sys.ts";
+import { decode, ensureLogDir } from "../sys.ts";
 import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
 import { validateName } from "../validate.ts";
 
@@ -62,6 +62,19 @@ function nativeArg(a: string): string {
   return ps(a);
 }
 
+// cmd.exe runs .bat/.cmd and expands these even inside quotes; there is no reliable escaping (BatBadBut).
+const BATCH_META = /[%!&|<>^]/;
+
+function batchSafe(command: string[]): void {
+  if (!/\.(bat|cmd)$/i.test(command[0]!)) return;
+  const bad = command.find((a) => BATCH_META.test(a));
+  if (bad !== undefined)
+    throw new OnCueError(
+      "UNSUPPORTED",
+      `Task Scheduler: ${JSON.stringify(bad)} cannot be passed safely to a batch file (% ! & | < > ^)`,
+    );
+}
+
 const el = (tag: string, body: string) => `<${tag}>${body}</${tag}>`;
 const repetition = (interval: string, duration?: string) =>
   el("Repetition", el("Interval", interval) + (duration ? el("Duration", duration) : ""));
@@ -103,6 +116,7 @@ function render(job: Job, env: Env): Rendered {
   const log = job.log && job.log !== "native" ? winPath(job.log, "log") : win32.join(dir(job, env), `${job.name}.log`);
   const cwd = winPath(job.cwd, "cwd");
   const command = job.command.map(nativeArg);
+  batchSafe(job.command);
   const vars = Object.entries(job.env ?? {}).map(([k, v]) => {
     if (!ENV_KEY.test(k)) throw new OnCueError("INVALID_SPEC", `env key ${JSON.stringify(k)} is not a valid name`);
     return `$env:${k} = ${ps(v)}`;
@@ -111,7 +125,12 @@ function render(job: Job, env: Env): Rendered {
     `# ${marker(job)}`,
     ...vars,
     `Set-Location -LiteralPath ${ps(cwd)}`,
-    `& ${command.join(" ")} 2>&1 | ForEach-Object { "$_" } | Out-File -LiteralPath ${ps(log)} -Append -Encoding utf8`,
+    "try {",
+    `  & ${command.join(" ")} 2>&1 | ForEach-Object { "$_" } | Out-File -LiteralPath ${ps(log)} -Append -Encoding utf8`,
+    "} catch {",
+    `  "$_" | Out-File -LiteralPath ${ps(log)} -Append -Encoding utf8`,
+    "  exit 1",
+    "}",
     "exit $LASTEXITCODE",
   ];
   const settings = [
@@ -165,7 +184,7 @@ function mayFail(sys: Sys, ...args: string[]) {
   try {
     schtasks(sys, ...args);
   } catch (e) {
-    if (!(e instanceof OnCueError)) throw e;
+    if (!(e instanceof OnCueError) || e.code !== "COMMAND_FAILED") throw e;
   }
 }
 
@@ -212,6 +231,7 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   if (pending.length === 0 && by === ref && live) return { changed: false, warnings: r.warnings };
 
   const wasKeepAlive = sys.read(xmlPath)?.includes("<LogonTrigger>") ?? false;
+  ensureLogDir(sys, job.log, win32);
   for (const f of pending) sys.write(f.path, f.content);
   schtasks(sys, "/create", "/tn", taskName(job), "/xml", xmlPath, "/f");
   if (keepAlive || wasKeepAlive) mayFail(sys, "/end", "/tn", taskName(job));
@@ -222,8 +242,14 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
 function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
   const p = paths(ref, env);
   const { task } = find(ref, sys);
-  const files = [p.ps1, p.xml].filter((f) => sys.read(f) !== undefined);
+  const texts = [p.ps1, p.xml].map((path) => ({ path, text: sys.read(path) })).filter((f) => f.text !== undefined);
+  const files = texts.map((f) => f.path);
   if (!task && files.length === 0) return { removed: false };
+  const unmarked = texts.find(
+    (f) => !f.text!.includes(`# ${marker(ref)}\n`) && !f.text!.includes(`<Source>${marker(ref)}</Source>`),
+  );
+  if (unmarked)
+    throw new OnCueError("INVALID_SPEC", `${unmarked.path} is not managed by oncue as ${ref.namespace}/${ref.name}`);
   if (task && owner(task) !== `${ref.namespace}/${ref.name}`) {
     throw new OnCueError(
       "INVALID_SPEC",

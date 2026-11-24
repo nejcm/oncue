@@ -65,6 +65,14 @@ describe("render", () => {
     expect(r.code).toBe(0);
     expect(r.out).toContain("==> /home/u/.config/systemd/user/tender-intake.timer");
   });
+
+  test("an unresolved command[0] is shown as given, with a warning", () => {
+    const r = run(["render", "-"], untouchable, JSON.stringify(spec));
+    expect(r.out).toContain('ExecStart="bun"');
+    expect(r.err).toContain('warning: command[0] "bun" is shown as given');
+    const abs = run(["render", "-"], untouchable, JSON.stringify({ ...spec, command: ["/usr/bin/true"] }));
+    expect(abs.err).toBe("");
+  });
 });
 
 describe("dry-run", () => {

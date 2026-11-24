@@ -1,6 +1,7 @@
 import { posix } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { systemdArg, systemdEnv, systemdText } from "../quote.ts";
+import { ensureLogDir } from "../sys.ts";
 import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
 
 const DAYS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
@@ -60,21 +61,17 @@ function render(job: Job, env: Env): Rendered {
     ...(s.kind === "keepAlive" ? ["", "[Install]", "WantedBy=default.target"] : []),
   ];
   const files = [{ path: `${u}.service`, content: `${service.join("\n")}\n` }];
+  const timerKeys = timerLines(job);
   if (s.kind !== "keepAlive") {
-    const timer = [
-      marker(job),
-      "[Unit]",
-      desc,
-      "",
-      "[Timer]",
-      ...timerLines(job),
-      "",
-      "[Install]",
-      "WantedBy=timers.target",
-    ];
+    const timer = [marker(job), "[Unit]", desc, "", "[Timer]", ...timerKeys, "", "[Install]", "WantedBy=timers.target"];
     files.push({ path: `${u}.timer`, content: `${timer.join("\n")}\n` });
   }
-  return { files, warnings: [] };
+  const monotonic = timerKeys[0]?.startsWith("OnStartupSec") ?? false;
+  const warnings =
+    job.catchUp === true && monotonic
+      ? ["systemd: unaligned intervals use monotonic timers, which cannot catch up; catchUp: true is ignored"]
+      : [];
+  return { files, warnings };
 }
 
 const systemctl = (sys: Sys, mutates: boolean, ...args: string[]) =>
@@ -84,7 +81,7 @@ function mayFail(sys: Sys, ...args: string[]) {
   try {
     systemctl(sys, true, ...args);
   } catch (e) {
-    if (!(e instanceof OnCueError)) throw e;
+    if (!(e instanceof OnCueError) || e.code !== "COMMAND_FAILED") throw e;
   }
 }
 
@@ -142,6 +139,7 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   const filesChanged = pending.length > 0 || staleTimer || disableOther;
   if (!filesChanged && enabled && active) return { changed: false, warnings: r.warnings };
 
+  ensureLogDir(sys, job.log);
   if (disableOther) mayFail(sys, "disable", "--now", other);
   if (staleTimer) sys.remove(`${u}.timer`);
   for (const f of pending) sys.write(f.path, f.content);

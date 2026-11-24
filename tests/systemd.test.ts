@@ -233,3 +233,29 @@ test("render rejects what systemd cannot express", () => {
   expect(code(() => systemd.render({ ...intake, log: "/srv/x.log " }, fakeEnv))).toBe("UNSUPPORTED");
   expect(code(() => systemd.render({ ...intake, command: ["/bin/x", "a\tb"] }, fakeEnv))).toBe("INVALID_SPEC");
 });
+
+test("uninstall without systemctl fails before removing units", () => {
+  const f = fakeSys(files());
+  f.sys.exec = () => {
+    throw new OnCueError("NOT_FOUND", "systemctl not found");
+  };
+  expect(code(() => systemd.uninstall(intake, fakeEnv, f.sys))).toBe("NOT_FOUND");
+  expect(f.mutations()).toEqual([]);
+});
+
+test("catchUp: true on an unaligned interval warns; the default does not", () => {
+  const unaligned = { ...intake, schedule: { kind: "interval" as const, minutes: 90 } };
+  expect(systemd.render({ ...unaligned, catchUp: true }, fakeEnv).warnings).toHaveLength(1);
+  expect(systemd.render(unaligned, fakeEnv).warnings).toEqual([]);
+  expect(systemd.render({ ...intake, catchUp: true }, fakeEnv).warnings).toEqual([]);
+});
+
+test("install creates the directory of a custom log before enabling", () => {
+  const log = "/home/u/logs/intake.log";
+  const f = fakeSys(
+    {},
+    state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")),
+  );
+  systemd.install({ ...intake, log }, fakeEnv, f.sys);
+  expect(f.mutations()[0]).toBe(`write ${log}`);
+});

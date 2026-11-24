@@ -1,4 +1,5 @@
 import { homedir } from "node:os";
+import { posix, win32 } from "node:path";
 import { OnCueError } from "./errors.ts";
 import { which } from "./path.ts";
 import { BACKENDS } from "./backends/index.ts";
@@ -67,12 +68,21 @@ export function render(spec: unknown, o: Pick<Options, "backend" | "env"> = {}):
       "NO_BACKEND",
       o.backend === undefined ? `no scheduler for ${host.platform}` : `unknown backend ${JSON.stringify(o.backend)}`,
     );
-  if (backend.platforms.includes(host.platform)) return backend.render(job, host);
+  const exe = job.command[0];
+  const unresolved =
+    posix.isAbsolute(exe) || win32.isAbsolute(exe)
+      ? []
+      : [`command[0] ${JSON.stringify(exe)} is shown as given; install writes its absolute path from PATH`];
+  if (backend.platforms.includes(host.platform)) {
+    const r = backend.render(job, host);
+    return { ...r, warnings: [...r.warnings, ...unresolved] };
+  }
   const r = backend.render(job, placeholderEnv(backend.platforms[0]!));
   return {
     ...r,
     warnings: [
       ...r.warnings,
+      ...unresolved,
       `rendered for ${backend.platforms.join("/")} on ${host.platform}: paths, uid and user are placeholders`,
     ],
   };

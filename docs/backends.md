@@ -26,7 +26,7 @@ Without `--backend`, oncue picks the backend for the current platform if this pr
 | Default log | user journal | `~/Library/Logs/<ns>-<name>.log` | `%LOCALAPPDATA%\oncue\<ns>\<name>.log` |
 | Needs from host | home | home, uid (`gui/<uid>` domain) | `%LOCALAPPDATA%`; `%USERDOMAIN%\%USERNAME%` for `keepAlive` |
 
-On Windows the task runs `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<name>.ps1"`. The script sets `env`, changes to `cwd`, runs the command with stdout and stderr appended to the log (`Out-File -Append -Encoding utf8`), and exits with the command's exit code.
+On Windows the task runs `powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "<name>.ps1"`. The script sets `env`, changes to `cwd`, runs the command with stdout and stderr appended to the log (`Out-File -Append -Encoding utf8`), and exits with the command's exit code. If the command cannot be launched (not found, not runnable), the error is appended to the log and the script exits 1.
 
 ## Field mapping
 
@@ -65,8 +65,8 @@ Aligned intervals (those dividing an hour, or a day in whole hours) fire on the 
 
 ### Catch-up
 
-- systemd: `Persistent=true` is written for calendar jobs and aligned intervals unless `catchUp: false`. Unaligned intervals use monotonic timers, which have no catch-up; `catchUp` has no effect on them and no warning is given.
-- launchd: no setting is written. `StartCalendarInterval` runs a slot missed during sleep once on wake **[unverified]**, so `catchUp: false` is ignored with a warning. `StartInterval` (unaligned intervals) skips events missed during sleep **[unverified]**. Behaviour after power-off is **[unverified]**.
+- systemd: `Persistent=true` is written for calendar jobs and aligned intervals unless `catchUp: false`. Unaligned intervals use monotonic timers, which have no catch-up; `catchUp` has no effect on them. An explicit `catchUp: true` warns; the default does not.
+- launchd: no setting is written. `StartCalendarInterval` runs a slot missed during sleep once on wake **[unverified]**, so `catchUp: false` is ignored with a warning. `StartInterval` (unaligned intervals) skips events missed during sleep **[unverified]**, so `catchUp: false` there needs no warning, and an explicit `catchUp: true` warns as on systemd. Behaviour after power-off is **[unverified]**.
 - Task Scheduler: `StartWhenAvailable` is `true` unless `catchUp: false`.
 
 ### keepAlive restarts
@@ -93,16 +93,18 @@ A timer run that comes due while the previous one is still running: Task Schedul
 `install` renders, compares each file with what is on disk, and checks scheduler state. Nothing is written or run when the files match and the job is already enabled/loaded and active.
 
 - systemd: write changed files, `daemon-reload` if any changed, `enable --now` the timer (or the `keepAlive` service) if not enabled and active, `restart` it if files changed and it was active. Changing the schedule kind disables the unit that was enabled for the old kind; a timer left over from a timer job is removed.
-- launchd: write the plist if changed, `bootout gui/<uid>/<label>` if loaded, `bootstrap gui/<uid> <plist>`. Up to date means the plist matches and `launchctl print` succeeds.
+- launchd: write the plist if changed, `bootout gui/<uid>/<label>` if loaded, `bootstrap gui/<uid> <plist>`. After a `bootout`, a `bootstrap` exiting 5 (the old instance still tearing down **[unverified]**) is retried up to 4 times, 0.5 s apart. Up to date means the plist matches and `launchctl print` succeeds.
 - Task Scheduler: write changed files, `schtasks /create /tn \<ns>\<name> /xml <file> /f`; for `keepAlive` (or a former `keepAlive`) `/end` the running instance, and for `keepAlive` `/run` it. Up to date means files match, the task is marked as this job and not `Disabled`, and a `keepAlive` task is `Running`.
 
-`uninstall` stops the job, removes its definition files and registration, and keeps logs:
+Every backend creates a missing directory for a custom `log` path before activating the job.
+
+`uninstall` stops the job, removes its definition files and registration, and keeps logs. A failed stop or disable is tolerated, but a missing scheduler tool (`NOT_FOUND`) or host value (`NO_BACKEND`) aborts before anything is removed:
 
 - systemd: `disable --now` the timer and `stop` the service (or `disable --now` the `keepAlive` service), remove the units, `daemon-reload`, `reset-failed`.
 - launchd: `bootout`, remove the plist.
 - Task Scheduler: `/end`, `/delete /f`, remove the `.ps1` and `.xml`.
 
-A definition at the job's path without a marker is overwritten by `install` but refused by `uninstall`; one marked for another job is refused by both. On Task Scheduler the check reads the registered task's `RegistrationInfo/Source`, not the `.ps1`/`.xml`; leftover files with no registered task are removed by `uninstall`.
+A definition at the job's path without a marker is overwritten by `install` but refused by `uninstall`; one marked for another job is refused by both. On Task Scheduler the check reads the registered task's `RegistrationInfo/Source` and the marker in the `.ps1`/`.xml`; leftover files with no registered task are removed by `uninstall` only if they carry the marker.
 
 ## Status
 

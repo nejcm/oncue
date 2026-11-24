@@ -51,6 +51,8 @@ Nothing from the installing shell is inherited: the scheduler's own environment 
 | omitted / `"native"` | user journal | `~/Library/Logs/<ns>-<name>.log` | `%LOCALAPPDATA%\oncue\<ns>\<name>.log` |
 | absolute path | appended (`append:`) | appended | appended by the wrapper script |
 
+`install` creates the directory of an absolute `log` path when it is missing; no scheduler does that itself.
+
 ## Schedules
 
 All times are the machine's local time zone. There is no time-zone field.
@@ -102,7 +104,7 @@ Applied when a definition is rendered, so `render` reports them too:
 - Control characters (U+0000 to U+001F, U+007F), U+FFFE, U+FFFF and unpaired surrogates are rejected in any value written to a definition: `INVALID_SPEC`.
 - systemd: `description`, `cwd` and `log` ending in `\` are `INVALID_SPEC`; `cwd` or `log` ending in a space is `UNSUPPORTED` (systemd strips edge whitespace from path settings and has no quoting for them).
 - launchd: a `namespace/name` containing `--` is `UNSUPPORTED` (the marker lives in an XML comment, which cannot contain `--`).
-- Task Scheduler: a command argument that is empty, contains `"`, or contains whitespace and ends in `\` is `UNSUPPORTED` (Windows PowerShell 5.1 re-quotes native arguments and would mangle them).
+- Task Scheduler: a command argument that is empty, contains `"`, or contains whitespace and ends in `\` is `UNSUPPORTED` (Windows PowerShell 5.1 re-quotes native arguments and would mangle them). When `command[0]` is a `.bat` or `.cmd` file, any word containing `%`, `!`, `&`, `|`, `<`, `>` or `^` is `UNSUPPORTED`: cmd.exe reinterprets them even inside quotes and they cannot be escaped reliably ([BatBadBut](https://nodejs.org/en/blog/vulnerability/april-2024-security-releases-2); Node.js refuses such spawns too).
 
 ## Name collisions
 

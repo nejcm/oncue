@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { dirname, posix } from "node:path";
 import { OnCueError } from "./errors.ts";
 import type { Sys } from "./types.ts";
 
@@ -9,6 +9,12 @@ export const decode = (data: string | Uint8Array): string =>
   typeof data === "string"
     ? data
     : Buffer.from(data).toString(data[0] === 0xff && data[1] === 0xfe ? "utf16le" : "utf8");
+
+/** Creates the directory of a custom `log` path, which no scheduler creates itself. */
+export function ensureLogDir(sys: Sys, log: string | undefined, path: Pick<typeof posix, "dirname"> = posix) {
+  // An empty listing means a missing or empty directory, so writing an empty log there clobbers nothing.
+  if (log && log !== "native" && sys.readdir(path.dirname(log)).length === 0) sys.write(log, "");
+}
 
 const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === "ENOENT";
 

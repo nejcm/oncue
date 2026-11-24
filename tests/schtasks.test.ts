@@ -239,3 +239,42 @@ test("available follows whether schtasks.exe runs", () => {
   };
   expect(ts.available(missing, fakeEnv)).toBe(false);
 });
+
+test("uninstall refuses leftover files without this job's marker", () => {
+  const foreign = fake({ [ps1]: "Write-Host hi\n" });
+  expect(code(() => ts.uninstall(intake, fakeEnv, foreign.sys))).toBe("INVALID_SPEC");
+  expect(foreign.mutations()).toEqual([]);
+  const prefix = fake({ [ps1]: files()[ps1]!.replace("tender/intake", "tender/intake2") });
+  expect(code(() => ts.uninstall(intake, fakeEnv, prefix.sys))).toBe("INVALID_SPEC");
+  const xmlOnly = fake({ [xml]: files()[xml]! });
+  expect(ts.uninstall(intake, fakeEnv, xmlOnly.sys)).toEqual({ removed: true });
+});
+
+test("the wrapper exits 1 when the command cannot be launched", () => {
+  const script = decode(ts.render(intake, fakeEnv).files[0]!.content);
+  expect(script).toMatch(/^try \{\n {2}& .*\n\} catch \{\n.*\n {2}exit 1\n\}\nexit \$LASTEXITCODE\n$/m);
+});
+
+test("a batch file rejects arguments cmd.exe would reinterpret", () => {
+  for (const exe of ["C:\\x\\tool.cmd", "C:\\x\\TOOL.BAT"]) {
+    for (const arg of ["a&b", "a|b", "%PATH%", "!x!", "a^b", "<in", ">out"])
+      expect(code(() => ts.render({ ...intake, command: [exe, arg] }, fakeEnv))).toBe("UNSUPPORTED");
+    expect(code(() => ts.render({ ...intake, command: [exe, "plain", "a b", "(x)"] }, fakeEnv))).toBeUndefined();
+  }
+  expect(code(() => ts.render({ ...intake, command: ["C:\\a%b\\tool.cmd"] }, fakeEnv))).toBe("UNSUPPORTED");
+  expect(code(() => ts.render({ ...intake, command: ["C:\\x\\tool.exe", "a&b"] }, fakeEnv))).toBeUndefined();
+});
+
+test("install creates the directory of a custom log, and a missing schtasks.exe is not swallowed", () => {
+  const log = "C:\\Users\\u\\logs\\intake.log";
+  const f = fake();
+  ts.install({ ...intake, log }, fakeEnv, f.sys);
+  expect(f.mutations()[0]).toBe(`write ${log}`);
+  const g = fake(files(run), [ours("run", { State: "Running" })]);
+  const exec = g.sys.exec;
+  g.sys.exec = (argv, o) => {
+    if (argv.join(" ") === "schtasks.exe /end /tn \\tender\\run") throw new OnCueError("NOT_FOUND", "gone");
+    return exec(argv, o);
+  };
+  expect(code(() => ts.install({ ...run, description: "changed" }, fakeEnv, g.sys))).toBe("NOT_FOUND");
+});

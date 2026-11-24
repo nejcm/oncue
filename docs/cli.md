@@ -27,7 +27,7 @@ One of `systemd`, `launchd`, `schtasks`. Without it, `install`, `uninstall`, `st
 
 Validates the spec and prints every file the backend would write, without reading or changing anything on the system. Each file is printed as `==> <path>` followed by its content. The Task Scheduler XML is stored as UTF-16LE but printed as text. Warnings go to stderr as `warning: <text>`.
 
-`command[0]` is printed as given; `install` resolves it to an absolute path first.
+`command[0]` is printed as given, with a warning when it is not absolute; `install` resolves it to an absolute path first.
 
 Rendering for another OS works from any machine. Home directory, uid, `%LOCALAPPDATA%` and user name are then placeholders (`/home/user`, `501`, `C:\Users\user\AppData\Local`, `PC\user`) and a warning says so:
 

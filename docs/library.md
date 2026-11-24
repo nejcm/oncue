@@ -62,7 +62,7 @@ function render(spec: unknown, o?: Pick<Options, "backend" | "env">): Rendered;
 type Rendered = { files: { path: string; content: string | Uint8Array }[]; warnings: string[] };
 ```
 
-Validates and renders without any system access. `command[0]` is not resolved. A backend for another OS renders with placeholder paths, uid and user, and adds a warning. Task Scheduler's XML `content` is a `Uint8Array` (UTF-16LE with BOM); everything else is a string.
+Validates and renders without any system access. `command[0]` is not resolved; when it is not absolute a warning says so. A backend for another OS renders with placeholder paths, uid and user, and adds a warning. Task Scheduler's XML `content` is a `Uint8Array` (UTF-16LE with BOM); everything else is a string.
 
 ```ts
 import { render } from "@nejcm/oncue";

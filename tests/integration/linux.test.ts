@@ -10,6 +10,19 @@ import { CASES } from "../cases.ts";
 import { fakeEnv } from "../fakes.ts";
 
 const run = (argv: string[]) => realSys.exec(argv, { mutates: false, ok: [0, 1] });
+// Without a user session verify cannot start its manager, and vendor units can add unrelated warnings.
+function verify(tmp: string, paths: string[]) {
+  const runtime = process.env.XDG_RUNTIME_DIR ? [] : ["env", `XDG_RUNTIME_DIR=${tmp}`];
+  const r = run([...runtime, "systemd-analyze", "--user", "verify", ...paths]);
+  const ours = paths.map((p) => basename(p));
+  return {
+    code: r.code,
+    err: r.err
+      .split("\n")
+      .filter((l) => ours.some((n) => l.includes(n)))
+      .join("\n"),
+  };
+}
 const enabled = process.env.ONCUE_IT === "1" && process.platform === "linux";
 
 describe.skipIf(!enabled)("systemd on this host", () => {
@@ -33,7 +46,7 @@ describe.skipIf(!enabled)("systemd on this host", () => {
           return p;
         }),
       );
-      const r = run(["systemd-analyze", "--user", "verify", ...paths]);
+      const r = verify(tmp, paths);
       expect(r.err).toBe("");
       expect(r.code).toBe(0);
     } finally {
@@ -49,7 +62,7 @@ describe.skipIf(!enabled)("systemd on this host", () => {
       const [service] = systemd.render({ ...CASES[0]!, command: [exe, "-c", "echo $x"] }, fakeEnv).files;
       const p = join(tmp, basename(service!.path));
       writeFileSync(p, service!.content);
-      expect(run(["systemd-analyze", "--user", "verify", p])).toMatchObject({ code: 0, err: "" });
+      expect(verify(tmp, [p])).toMatchObject({ code: 0, err: "" });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
