@@ -1,0 +1,10 @@
+# managed-by oncue shape/daily
+[Unit]
+Description=shape/daily
+
+[Timer]
+OnCalendar=*-*-* 00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

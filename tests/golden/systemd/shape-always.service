@@ -1,0 +1,12 @@
+# managed-by oncue shape/always
+[Unit]
+Description=shape/always
+
+[Service]
+Type=simple
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"
+Restart=always
+
+[Install]
+WantedBy=default.target

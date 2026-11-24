@@ -1,0 +1,8 @@
+# managed-by oncue shape/daily
+[Unit]
+Description=shape/daily
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"

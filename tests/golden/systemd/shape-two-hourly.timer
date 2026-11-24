@@ -1,0 +1,10 @@
+# managed-by oncue shape/two-hourly
+[Unit]
+Description=shape/two-hourly
+
+[Timer]
+OnCalendar=*-*-* 0/2:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

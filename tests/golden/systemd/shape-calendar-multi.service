@@ -1,0 +1,8 @@
+# managed-by oncue shape/calendar-multi
+[Unit]
+Description=shape/calendar-multi
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"

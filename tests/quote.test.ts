@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { OnCueError } from "../src/errors.ts";
-import { ps, sh, systemdArg, systemdEnv, xml } from "../src/quote.ts";
+import { ps, sh, systemdArg, systemdEnv, systemdText, xml } from "../src/quote.ts";
 
 const cases: [string, (s: string) => string, [string, string][]][] = [
   ["xml", xml, [
@@ -35,6 +35,10 @@ const cases: [string, (s: string) => string, [string, string][]][] = [
     ['q"\\', '"K=q\\"\\\\"'],
     ["50% $HOME", '"K=50%% $HOME"'],
   ]],
+  ["systemdText", systemdText, [
+    ["/a b/100%", "/a b/100%%"],
+    ['"q" $x \\n', '"q" $x \\n'],
+  ]],
 ];
 
 for (const [name, fn, table] of cases) {
@@ -53,6 +57,10 @@ for (const [name, fn, table] of cases) {
 
 test("systemdEnv rejects control chars in key", () => {
   expect(() => systemdEnv("A\nB", "x")).toThrow(OnCueError);
+});
+
+test("systemdText rejects a trailing backslash", () => {
+  expect(() => systemdText("/a\\")).toThrow(OnCueError);
 });
 
 test("surrogate pairs pass", () => {

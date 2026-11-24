@@ -1,0 +1,9 @@
+# managed-by oncue shape/no-catchup
+[Unit]
+Description=shape/no-catchup
+
+[Timer]
+OnCalendar=*:0/30
+
+[Install]
+WantedBy=timers.target

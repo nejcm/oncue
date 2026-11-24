@@ -1,0 +1,10 @@
+# managed-by oncue tender/intake
+[Unit]
+Description=tender: run the intake rules enabled for this host
+
+[Timer]
+OnCalendar=*:0/15
+Persistent=true
+
+[Install]
+WantedBy=timers.target

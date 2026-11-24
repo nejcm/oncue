@@ -1,0 +1,13 @@
+# managed-by oncue shape/calendar-multi
+[Unit]
+Description=shape/calendar-multi
+
+[Timer]
+OnCalendar=*-*-* *:05
+OnCalendar=*-*-* 00:30
+OnCalendar=*-*-01 06:00
+OnCalendar=Sun *-*-* *:45
+Persistent=true
+
+[Install]
+WantedBy=timers.target

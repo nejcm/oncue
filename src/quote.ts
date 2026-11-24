@@ -18,6 +18,12 @@ export const systemdArg = (s: string): string =>
 export const systemdEnv = (key: string, value: string): string =>
   `"${`${clean(key)}=${clean(value)}`.replace(/[\\"]/g, "\\$&").replace(/%/g, "%%")}"`;
 
+// Unquoted settings still expand specifiers, and a trailing backslash would continue the line.
+export const systemdText = (s: string): string => {
+  if (s.endsWith("\\")) throw new OnCueError("INVALID_SPEC", `trailing backslash in ${JSON.stringify(s)}`);
+  return clean(s).replace(/%/g, "%%");
+};
+
 export const sh = (s: string): string => `'${clean(s).replace(/'/g, "'\\''")}'`;
 
 // PowerShell treats the curly single quotes as quote characters too.

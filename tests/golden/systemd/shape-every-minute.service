@@ -1,0 +1,8 @@
+# managed-by oncue shape/every-minute
+[Unit]
+Description=shape/every-minute
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"

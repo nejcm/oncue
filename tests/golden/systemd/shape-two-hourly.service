@@ -1,0 +1,8 @@
+# managed-by oncue shape/two-hourly
+[Unit]
+Description=shape/two-hourly
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"

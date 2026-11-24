@@ -22,14 +22,18 @@ function optInt(o: Record<string, unknown>, key: string, min: number, max: numbe
   if (o[key] !== undefined && !isInt(o[key], min, max)) fail(`${where}.${key} must be an integer ${min}..${max}`);
 }
 
+/** Checks a namespace or job name before it reaches a path or argv. */
+export function validateName(value: unknown, field = "name"): string {
+  if (typeof value !== "string" || !NAME.test(value)) fail(`${field} must match ${NAME}`);
+  return value as string;
+}
+
 /** Checks untrusted input against the Job model; `install` also requires an absolute command[0]. */
 export function validateJob(input: unknown, opts: { install?: boolean } = {}): Job {
   if (!isObj(input)) return fail("job must be an object");
   const j = input;
   onlyKeys(j, JOB_KEYS, "");
-  for (const k of ["namespace", "name"]) {
-    if (typeof j[k] !== "string" || !NAME.test(j[k])) fail(`${k} must match ${NAME}`);
-  }
+  for (const k of ["namespace", "name"]) validateName(j[k], k);
   if (j.description !== undefined && typeof j.description !== "string") fail("description must be a string");
   const cmd = j.command;
   if (!Array.isArray(cmd) || cmd.length === 0 || !cmd.every((a) => typeof a === "string")) {

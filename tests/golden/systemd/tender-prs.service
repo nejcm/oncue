@@ -1,0 +1,9 @@
+# managed-by oncue tender/prs
+[Unit]
+Description=tender: close orphan agent PRs, report the rest
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/u/Work/agent-workflow
+ExecStart="/home/u/.bun/bin/bun" "tender.ts" "prs" "--config" "tender.json"
+Environment="PATH=/home/u/.bun/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin"

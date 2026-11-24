@@ -1,0 +1,15 @@
+# managed-by oncue tender/run
+[Unit]
+Description=tender: start agent sessions for ready tickets
+
+[Service]
+Type=simple
+WorkingDirectory=/home/u/Work/agent-workflow
+ExecStart="/home/u/.bun/bin/bun" "tender.ts" "run" "--config" "tender.json"
+Environment="PATH=/home/u/.bun/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Restart=on-failure
+RestartSec=30
+KillMode=process
+
+[Install]
+WantedBy=default.target
