@@ -30,12 +30,12 @@ export type Io = { sys?: Sys; env?: Env; stdout?: (s: string) => void; stderr?: 
 function readSpec(arg: string, stdin: () => string): unknown {
   let text: string;
   try {
-    text = arg === "-" ? stdin() : readFileSync(arg, "utf8");
+    text = arg === "-" ? stdin() : decode(readFileSync(arg));
   } catch (e) {
     throw new UsageError(`cannot read ${arg}: ${(e as Error).message}`);
   }
   try {
-    return JSON.parse(text);
+    return JSON.parse(text.replace(/^\uFEFF/, ""));
   } catch (e) {
     throw new OnCueError("INVALID_SPEC", `${arg}: ${(e as Error).message}`);
   }
@@ -50,7 +50,7 @@ function withPath(spec: unknown, tools: string, platform: NodeJS.Platform): Job 
 export function main(argv: string[], io: Io = {}): number {
   const out = io.stdout ?? ((s) => process.stdout.write(`${s}\n`));
   const err = io.stderr ?? ((s) => process.stderr.write(`${s}\n`));
-  const stdin = io.stdin ?? (() => readFileSync(0, "utf8"));
+  const stdin = io.stdin ?? (() => decode(readFileSync(0)));
   try {
     let parsed;
     try {
@@ -87,11 +87,11 @@ export function main(argv: string[], io: Io = {}): number {
         if (v["capture-path"] !== undefined) job = withPath(job, v["capture-path"], io.env?.platform ?? process.platform);
         const r = install(job, o);
         warn(r.warnings);
-        out(r.changed ? "installed" : "unchanged");
+        out(r.changed ? (v["dry-run"] ? "would install" : "installed") : "unchanged");
         break;
       }
       case "uninstall":
-        out(uninstall({ namespace: a, name: b ?? "" }, o).removed ? "removed" : "not installed");
+        out(uninstall({ namespace: a, name: b ?? "" }, o).removed ? (v["dry-run"] ? "would remove" : "removed") : "not installed");
         break;
       case "status": {
         const names = b === undefined ? list(a, o) : [b];

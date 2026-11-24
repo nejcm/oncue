@@ -22,7 +22,7 @@ function dir(ref: JobRef, env: Env): string {
 const paths = (ref: JobRef, env: Env) => ({ ps1: win32.join(dir(ref, env), `${ref.name}.ps1`), xml: win32.join(dir(ref, env), `${ref.name}.xml`) });
 
 function winPath(p: string, field: string): string {
-  if (!win32.isAbsolute(p)) throw new OnCueError("INVALID_SPEC", `${field} must be an absolute Windows path for Task Scheduler`);
+  if (!/^(?:[a-z]:[\\/]|[\\/]{2}[^\\/]+[\\/][^\\/]+)/i.test(p)) throw new OnCueError("INVALID_SPEC", `${field} must be an absolute Windows path (drive or UNC) for Task Scheduler`);
   return p;
 }
 

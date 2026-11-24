@@ -5,10 +5,10 @@ import { taskScheduler as ts } from "../src/backends/schtasks.ts";
 import { OnCueError } from "../src/errors.ts";
 import { decode, dryRunSys } from "../src/sys.ts";
 import type { ExecResult } from "../src/types.ts";
-import { CASES } from "./cases.ts";
+import { CASES, windows } from "./cases.ts";
 import { fakeEnv, fakeSys } from "./fakes.ts";
 
-const [run, intake, , hostile] = CASES as [(typeof CASES)[number], (typeof CASES)[number], unknown, (typeof CASES)[number]];
+const [run, intake, , hostile] = CASES.map(windows) as [(typeof CASES)[number], (typeof CASES)[number], unknown, (typeof CASES)[number]];
 const dir = "C:\\Users\\u\\AppData\\Local\\oncue\\tender";
 const ps1 = `${dir}\\intake.ps1`;
 const xml = `${dir}\\intake.xml`;
@@ -167,7 +167,8 @@ test("render rejects what Windows PowerShell or the task cannot hold", () => {
   for (const arg of ["", 'say "hi"', "C:\\dir with space\\"]) {
     expect(code(() => ts.render({ ...intake, command: ["C:\\x.exe", arg] }, fakeEnv))).toBe("UNSUPPORTED");
   }
-  expect(code(() => ts.render({ ...intake, cwd: "relative" }, fakeEnv))).toBe("INVALID_SPEC");
+  for (const cwd of ["relative", "/home/u", "C:relative", "\\only-server"]) expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBe("INVALID_SPEC");
+  for (const cwd of ["C:\\x", "c:/x", "\\\\srv\\share\\x"]) expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBeUndefined();
   expect(code(() => ts.render({ ...intake, env: { "A;rm": "x" } }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => ts.render({ ...intake, command: ["C:\\x.exe", "a\u0001b"] }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => ts.render(run, { ...fakeEnv, user: undefined }))).toBe("NO_BACKEND");

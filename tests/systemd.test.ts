@@ -9,7 +9,7 @@ const [run, intake] = CASES as [(typeof CASES)[number], (typeof CASES)[number]];
 const dir = "/home/u/.config/systemd/user";
 const sc = "systemctl --user";
 const state = (units: string, ...blocks: string[]) => ({
-  [`${sc} show ${units} -p UnitFileState,ActiveState --timestamp=unix`]: { out: blocks.join("\n\n") },
+  [`${sc} show ${units} -p UnitFileState,ActiveState`]: { out: blocks.join("\n\n") },
 });
 const block = (fileState: string, active: string) => `UnitFileState=${fileState}\nActiveState=${active}\n`;
 const files = (job = intake) => Object.fromEntries(systemd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
@@ -156,6 +156,18 @@ test("status parses show output and warns when linger is off", () => {
   expect(systemd.status(run, fakeEnv, fakeSys().sys)).toMatchObject({ installed: false, active: false });
 });
 
+test("status on systemd < 251 (no --timestamp=unix) still reports state, without dates", () => {
+  const props =
+    "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,NextElapseUSecRealtime,LastTriggerUSec";
+  const show = `${sc} show tender-intake.service tender-intake.timer -p ${props}`;
+  const out = [
+    "ActiveState=inactive\nExecMainStatus=3\nExecMainStartTimestamp=Tue 2023-11-14 22:13:20 UTC\nExecMainExitTimestamp=Tue 2023-11-14 22:13:25 UTC\n",
+    "ActiveState=active\nNextElapseUSecRealtime=Tue 2023-11-14 22:28:20 UTC\nLastTriggerUSec=Tue 2023-11-14 22:13:20 UTC\n",
+  ].join("\n");
+  const f = fakeSys(files(), { [`${show} --timestamp=unix`]: { code: 1 }, [show]: { out } });
+  expect(systemd.status(intake, fakeEnv, f.sys)).toMatchObject({ installed: true, active: true, lastExit: 3, lastRun: undefined, nextRun: undefined });
+});
+
 test("dry-run install performs no mutations and logs them", () => {
   const f = fakeSys({}, state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")));
   const log: string[] = [];
@@ -178,5 +190,7 @@ test("render rejects what systemd cannot express", () => {
   expect(code(() => systemd.render({ ...intake, cwd: "C:\\work" }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => systemd.render({ ...intake, description: "a\nb" }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => systemd.render({ ...intake, cwd: "/srv/x\\" }, fakeEnv))).toBe("INVALID_SPEC");
+  expect(code(() => systemd.render({ ...intake, cwd: "/srv/x " }, fakeEnv))).toBe("UNSUPPORTED");
+  expect(code(() => systemd.render({ ...intake, log: "/srv/x.log " }, fakeEnv))).toBe("UNSUPPORTED");
   expect(code(() => systemd.render({ ...intake, command: ["/bin/x", "a\tb"] }, fakeEnv))).toBe("INVALID_SPEC");
 });

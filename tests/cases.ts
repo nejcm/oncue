@@ -59,6 +59,17 @@ const HOSTILE_WIN: Job = {
   schedule: { kind: "interval", minutes: 5 },
 };
 
+const winPath = (p: string) => `C:${p.replace(/^\/home\/u(?=\/|$)/, "/Users/u").replaceAll("/", "\\")}`;
+
+/** The same job with Windows-shaped paths, for Task Scheduler. */
+export const windows = (j: Job): Job => ({
+  ...j,
+  cwd: winPath(j.cwd),
+  command: [winPath(j.command[0]!), ...j.command.slice(1)],
+  ...(j.log && { log: winPath(j.log) }),
+  ...(j.env?.PATH && { env: { ...j.env, PATH: j.env.PATH.split(":").map(winPath).join(";") } }),
+});
+
 /** Task Scheduler cannot pass `"` or empty arguments, so it gets a Windows-shaped hostile case instead. */
 export const casesFor = (backend: string): Job[] =>
-  backend === "schtasks" ? [...CASES.filter((j) => j.namespace !== "hostile"), HOSTILE_WIN] : CASES;
+  backend === "schtasks" ? [...CASES.filter((j) => j.namespace !== "hostile").map(windows), HOSTILE_WIN] : CASES;

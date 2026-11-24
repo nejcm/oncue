@@ -16,7 +16,7 @@
     <Exec>
       <Command>powershell.exe</Command>
       <Arguments>-NoProfile -NonInteractive -ExecutionPolicy Bypass -File &quot;C:\Users\u\AppData\Local\oncue\tender\intake.ps1&quot;</Arguments>
-      <WorkingDirectory>/home/u/Work/agent-workflow</WorkingDirectory>
+      <WorkingDirectory>C:\Users\u\Work\agent-workflow</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>

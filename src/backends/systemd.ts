@@ -18,6 +18,8 @@ function owner(text: string | undefined): string | undefined {
 
 function posixPath(p: string, field: string): string {
   if (!posix.isAbsolute(p)) throw new OnCueError("INVALID_SPEC", `${field} must be an absolute POSIX path for systemd`);
+  // systemd strips edge whitespace from path settings and has no quoting for them.
+  if (p.endsWith(" ")) throw new OnCueError("UNSUPPORTED", `systemd: ${field} ${JSON.stringify(p)} ends with a space`);
   return systemdText(p);
 }
 
@@ -74,8 +76,16 @@ function mayFail(sys: Sys, ...args: string[]) {
   }
 }
 
-function show(sys: Sys, units: string[], props: string[]): { blocks: Record<string, string>[]; native: string } {
-  const native = systemctl(sys, false, "show", ...units, "-p", props.join(","), "--timestamp=unix").out;
+// --timestamp=unix needs systemd 251; older hosts still get status, without dates.
+function show(sys: Sys, units: string[], props: string[], unix = false): { blocks: Record<string, string>[]; native: string } {
+  const args = ["show", ...units, "-p", props.join(",")];
+  let native: string;
+  try {
+    native = systemctl(sys, false, ...args, ...(unix ? ["--timestamp=unix"] : [])).out;
+  } catch (e) {
+    if (!unix || !(e instanceof OnCueError) || e.code !== "COMMAND_FAILED") throw e;
+    native = systemctl(sys, false, ...args).out;
+  }
   const blocks = native.split(/\n\n/).map((b) =>
     Object.fromEntries(b.split("\n").filter(Boolean).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)])),
   );
@@ -162,7 +172,7 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   const { blocks, native } = show(sys, timer ? [`${u}.service`, `${u}.timer`] : [`${u}.service`], [
     ...props,
     ...(timer ? ["NextElapseUSecRealtime", "LastTriggerUSec"] : []),
-  ]);
+  ], true);
   const svc = blocks[0] ?? {};
   const tmr = timer ? (blocks[1] ?? {}) : undefined;
   return {
