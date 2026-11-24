@@ -62,7 +62,7 @@ posixOnly("non-win32 host defaults to posix rules", () => {
 });
 
 test.skipIf(process.platform !== "win32")("win32 host defaults to PATHEXT rules", () => {
-  expect(which("gh", `${a};${b}`)).toBe(join(b, "gh.cmd"));
+  expect(which("gh", `${a};${b}`)?.toLowerCase()).toBe(join(b, "gh.cmd").toLowerCase());
 });
 
 test.skipIf(process.platform !== "linux")("windows: PATHEXT case on a case-sensitive fs", () => {
