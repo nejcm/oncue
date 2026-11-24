@@ -167,6 +167,8 @@ function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
   if (files.some((f) => f.path.endsWith(".timer"))) {
     mayFail(sys, "disable", "--now", `${u}.timer`);
     mayFail(sys, "stop", `${u}.service`);
+    // Persistent= stamp under ~/.local/share/systemd/timers; left behind, a reinstall would catch up on it (systemd 243+).
+    mayFail(sys, "clean", "--what=state", `${u}.timer`);
   } else {
     mayFail(sys, "disable", "--now", `${u}.service`);
   }

@@ -132,15 +132,17 @@ test("uninstall: missing is a no-op, unmarked or foreign is refused", () => {
   }
 });
 
-test("uninstall timer job stops both units and tolerates their failures", () => {
+test("uninstall timer job stops both units, clears the timer stamp and tolerates their failures", () => {
   const f = fakeSys(files(), {
     [`${sc} stop tender-intake.service`]: { code: 5 },
+    [`${sc} clean --what=state tender-intake.timer`]: { code: 1 },
     [`${sc} reset-failed tender-intake.service`]: { code: 1 },
   });
   expect(systemd.uninstall(intake, fakeEnv, f.sys)).toEqual({ removed: true });
   expect(f.mutations()).toEqual([
     `exec ${sc} disable --now tender-intake.timer`,
     `exec ${sc} stop tender-intake.service`,
+    `exec ${sc} clean --what=state tender-intake.timer`,
     `remove ${dir}/tender-intake.service`,
     `remove ${dir}/tender-intake.timer`,
     `exec ${sc} daemon-reload`,
