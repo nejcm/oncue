@@ -1,7 +1,8 @@
 import { OnCueError } from "../src/errors.ts";
+import { decode } from "../src/sys.ts";
 import type { Env, ExecResult, Sys } from "../src/types.ts";
 
-export const fakeEnv: Env = { platform: "linux", home: "/home/u", uid: 501, localAppData: "C:\\Users\\u\\AppData\\Local" };
+export const fakeEnv: Env = { platform: "linux", home: "/home/u", uid: 501, localAppData: "C:\\Users\\u\\AppData\\Local", user: "PC\\u" };
 
 export type Call = { op: "write" | "remove" | "exec"; arg: string; mutates: boolean };
 
@@ -14,7 +15,7 @@ export function fakeSys(files: Record<string, string> = {}, canned: Record<strin
     readdir: (d) => [...fs.keys()].filter((p) => p.startsWith(`${d}/`)).map((p) => p.slice(d.length + 1)),
     write(p, data) {
       calls.push({ op: "write", arg: p, mutates: true });
-      fs.set(p, String(data));
+      fs.set(p, decode(data));
     },
     remove(p) {
       calls.push({ op: "remove", arg: p, mutates: true });

@@ -1,0 +1,4 @@
+﻿# managed-by oncue shape/calendar-multi
+Set-Location -LiteralPath '/tmp'
+& '/usr/bin/true' 2>&1 | ForEach-Object { "$_" } | Out-File -LiteralPath 'C:\Users\u\AppData\Local\oncue\shape\calendar-multi.log' -Append -Encoding utf8
+exit $LASTEXITCODE

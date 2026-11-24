@@ -4,12 +4,16 @@ import { dirname } from "node:path";
 import { OnCueError } from "./errors.ts";
 import type { Sys } from "./types.ts";
 
+/** Text of file bytes: UTF-16LE when they start with its BOM (kept as U+FEFF), else UTF-8. */
+export const decode = (data: string | Uint8Array): string =>
+  typeof data === "string" ? data : Buffer.from(data).toString(data[0] === 0xff && data[1] === 0xfe ? "utf16le" : "utf8");
+
 const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === "ENOENT";
 
 export const realSys: Sys = {
   read(path) {
     try {
-      return readFileSync(path, "utf8");
+      return decode(readFileSync(path));
     } catch (e) {
       if (missing(e)) return undefined;
       throw e;

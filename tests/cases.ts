@@ -47,3 +47,18 @@ export const CASES: Job[] = [
   }),
   shape("always", { kind: "keepAlive", restart: "always" }),
 ];
+
+const HOSTILE_WIN: Job = {
+  namespace: "hostile",
+  name: "argv-win",
+  description: "100% <odd> & \"quoted\" 'job' ünï",
+  command: ["C:\\Program Files\\my tools\\run.exe", "$env:HOME", "%PATH%", "it's", "\u2018curly\u2019", "a&b<c>d|e", "back\\slash", "ünïcödé ✓", "$(calc)", "`tick", "a b"],
+  cwd: "C:\\Users\\u\\dir with spaces\\100%",
+  env: { A: "$x %i \"q\" 's' \\ & <> `n", EMPTY: "", UNI: "日本" },
+  log: "C:\\Users\\u\\logs\\my job %.log",
+  schedule: { kind: "interval", minutes: 5 },
+};
+
+/** Task Scheduler cannot pass `"` or empty arguments, so it gets a Windows-shaped hostile case instead. */
+export const casesFor = (backend: string): Job[] =>
+  backend === "schtasks" ? [...CASES.filter((j) => j.namespace !== "hostile"), HOSTILE_WIN] : CASES;

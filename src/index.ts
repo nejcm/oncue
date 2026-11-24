@@ -20,6 +20,7 @@ const hostEnv = (): Env => ({
   home: homedir(),
   uid: process.getuid?.(),
   localAppData: process.env.LOCALAPPDATA,
+  user: process.env.USERNAME && (process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME),
   systemRoot: process.env.SystemRoot,
 });
 

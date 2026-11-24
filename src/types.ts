@@ -24,6 +24,7 @@ export interface Env {
   home: string;
   uid?: number;
   localAppData?: string;
+  user?: string;
   systemRoot?: string;
 }
 

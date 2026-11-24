@@ -47,3 +47,11 @@ test("dryRunSys logs mutations and passes reads through", () => {
   expect(log).toEqual([`write ${join(root, "dry")}`, `remove ${join(root, "dry")}`, "exec systemctl --user daemon-reload"]);
   expect(sys.read(join(root, "dry"))).toBeUndefined();
 });
+
+test("realSys read decodes UTF-16LE files with a BOM, keeping the BOM", () => {
+  const f = join(root, "t.xml");
+  realSys.write(f, Buffer.from("﻿<a>ü</a>", "utf16le"));
+  expect(realSys.read(f)).toBe("﻿<a>ü</a>");
+  realSys.write(f, "﻿utf8 ü");
+  expect(realSys.read(f)).toBe("﻿utf8 ü");
+});
