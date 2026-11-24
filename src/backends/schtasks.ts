@@ -114,8 +114,8 @@ function render(job: Job, env: Env): Rendered {
   ];
   return {
     files: [
-      { path: p.ps1, content: `﻿${script.join("\n")}\n` },
-      { path: p.xml, content: Buffer.from(`﻿${task.join("\n")}\n`, "utf16le") },
+      { path: p.ps1, content: `\ufeff${script.join("\n")}\n` },
+      { path: p.xml, content: Buffer.from(`\ufeff${task.join("\n")}\n`, "utf16le") },
     ],
     warnings,
   };
@@ -160,9 +160,10 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   if (by && by !== ref) throw new OnCueError("INVALID_SPEC", `task ${taskName(job)} belongs to oncue job ${by}`);
   const xmlPath = paths(job, env).xml;
   const pending = r.files.filter((f) => sys.read(f.path) !== decode(f.content));
-  if (pending.length === 0 && by === ref) return { changed: false, warnings: r.warnings };
-
   const keepAlive = job.schedule.kind === "keepAlive";
+  const live = task?.State !== "Disabled" && (!keepAlive || task?.State === "Running");
+  if (pending.length === 0 && by === ref && live) return { changed: false, warnings: r.warnings };
+
   const wasKeepAlive = sys.read(xmlPath)?.includes("<LogonTrigger>") ?? false;
   for (const f of pending) sys.write(f.path, f.content);
   schtasks(sys, "/create", "/tn", taskName(job), "/xml", xmlPath, "/f");

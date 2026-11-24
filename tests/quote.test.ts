@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { OnCueError } from "../src/errors.ts";
-import { ps, sh, systemdArg, systemdEnv, systemdText, xml } from "../src/quote.ts";
+import { ps, systemdArg, systemdEnv, systemdText, xml } from "../src/quote.ts";
 
 const cases: [string, (s: string) => string, [string, string][]][] = [
   ["xml", xml, [
@@ -16,12 +16,6 @@ const cases: [string, (s: string) => string, [string, string][]][] = [
     ["C:\\path\\", '"C:\\\\path\\\\"'],
     ["100% $HOME ${X}", '"100%% $$HOME $${X}"'],
     ["it's ünï 🐢 & <>", `"it's ünï 🐢 & <>"`],
-  ]],
-  ["sh", sh, [
-    ["", "''"],
-    ["a b", "'a b'"],
-    ["it's", "'it'\\''s'"],
-    ['$(touch x) `x` "y" %', `'$(touch x) \`x\` "y" %'`],
   ]],
   ["ps", ps, [
     ["", "''"],
@@ -54,6 +48,10 @@ for (const [name, fn, table] of cases) {
     expect((err as OnCueError).code).toBe("INVALID_SPEC");
   });
 }
+
+test("systemdArg leaves $ alone in the program path", () => {
+  expect(systemdArg("/opt/a$b %x", true)).toBe('"/opt/a$b %%x"');
+});
 
 test("systemdEnv rejects control chars in key", () => {
   expect(() => systemdEnv("A\nB", "x")).toThrow(OnCueError);

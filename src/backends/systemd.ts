@@ -48,7 +48,7 @@ function render(job: Job, env: Env): Rendered {
     "[Service]",
     `Type=${s.kind === "keepAlive" ? "simple" : "oneshot"}`,
     `WorkingDirectory=${posixPath(job.cwd, "cwd")}`,
-    `ExecStart=${job.command.map(systemdArg).join(" ")}`,
+    `ExecStart=${job.command.map((c, i) => systemdArg(c, i === 0)).join(" ")}`,
     ...Object.entries(job.env ?? {}).map(([k, v]) => `Environment=${systemdEnv(k, v)}`),
     ...(log ? [`StandardOutput=${log}`, `StandardError=${log}`] : []),
     ...(s.kind === "keepAlive" ? [`Restart=${s.restart}`] : []),

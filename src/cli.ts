@@ -122,4 +122,10 @@ export function main(argv: string[], io: Io = {}): number {
   }
 }
 
-if (import.meta.main) process.exitCode = main(process.argv.slice(2));
+if (import.meta.main) {
+  // A reader that closed the pipe early (`| head`) is not a failure.
+  process.stdout.on("error", (e: NodeJS.ErrnoException) => {
+    if (e.code !== "EPIPE") throw e;
+  });
+  process.exitCode = main(process.argv.slice(2));
+}

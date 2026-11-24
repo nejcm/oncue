@@ -53,6 +53,22 @@ test("unchanged and registered re-install makes zero mutations", () => {
   expect(f.mutations()).toEqual([]);
 });
 
+test("unchanged but disabled, or a stopped keepAlive: re-create (and run), like the other backends", () => {
+  const disabled = fake(files(), [ours("intake", { State: "Disabled" })]);
+  expect(ts.install(intake, fakeEnv, disabled.sys).changed).toBe(true);
+  expect(disabled.mutations()).toEqual([`exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`]);
+  const stopped = fake(files(run), [ours("run", { State: "Ready" })]);
+  expect(ts.install(run, fakeEnv, stopped.sys).changed).toBe(true);
+  expect(stopped.mutations()).toEqual([
+    `exec schtasks.exe /create /tn \\tender\\run /xml ${dir}\\run.xml /f`,
+    "exec schtasks.exe /end /tn \\tender\\run",
+    "exec schtasks.exe /run /tn \\tender\\run",
+  ]);
+  const running = fake(files(run), [ours("run", { State: "Running" })]);
+  expect(ts.install(run, fakeEnv, running.sys).changed).toBe(false);
+  expect(running.mutations()).toEqual([]);
+});
+
 test("unchanged but not registered: create only", () => {
   const f = fake(files());
   expect(ts.install(intake, fakeEnv, f.sys).changed).toBe(true);

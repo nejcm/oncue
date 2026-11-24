@@ -25,7 +25,6 @@ export interface Env {
   uid?: number;
   localAppData?: string;
   user?: string;
-  systemRoot?: string;
 }
 
 export type ExecResult = { code: number; out: string; err: string };

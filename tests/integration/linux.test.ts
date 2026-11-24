@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { systemd } from "../../src/backends/systemd.ts";
@@ -33,6 +33,20 @@ describe.skipIf(!enabled)("systemd on this host", () => {
       const r = run(["systemd-analyze", "--user", "verify", ...paths]);
       expect(r.err).toBe("");
       expect(r.code).toBe(0);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test("systemd-analyze --user verify accepts a program path with $ and %", () => {
+    const tmp = mkdtempSync(join(tmpdir(), "oncue-verify-"));
+    try {
+      const exe = join(tmp, "a$b%c");
+      symlinkSync("/bin/sh", exe);
+      const [service] = systemd.render({ ...CASES[0]!, command: [exe, "-c", "echo $x"] }, fakeEnv).files;
+      const p = join(tmp, basename(service!.path));
+      writeFileSync(p, service!.content);
+      expect(run(["systemd-analyze", "--user", "verify", p])).toMatchObject({ code: 0, err: "" });
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }

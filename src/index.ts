@@ -3,18 +3,17 @@ import { OnCueError } from "./errors.ts";
 import { which } from "./path.ts";
 import { BACKENDS } from "./backends/index.ts";
 import { selectBackend } from "./select.ts";
-import { dryRunSys, realSys } from "./sys.ts";
+import { realSys } from "./sys.ts";
 import type { Backend, Env, JobRef, Rendered, Status, Sys } from "./types.ts";
 import { validateJob, validateName } from "./validate.ts";
 
-export const VERSION = "0.0.0";
 export type * from "./types.ts";
 export { OnCueError } from "./errors.ts";
 export { validateJob } from "./validate.ts";
 export { capturePath, which } from "./path.ts";
 export { BACKENDS } from "./backends/index.ts";
 
-export type Options = { backend?: Backend | string; env?: Env; sys?: Sys; dryRun?: boolean };
+export type Options = { backend?: Backend | string; env?: Env; sys?: Sys };
 
 const hostEnv = (): Env => ({
   platform: process.platform,
@@ -22,12 +21,11 @@ const hostEnv = (): Env => ({
   uid: process.getuid?.(),
   localAppData: process.env.LOCALAPPDATA,
   user: process.env.USERNAME && (process.env.USERDOMAIN ? `${process.env.USERDOMAIN}\\${process.env.USERNAME}` : process.env.USERNAME),
-  systemRoot: process.env.SystemRoot,
 });
 
 function setup(o: Options) {
   const env = o.env ?? hostEnv();
-  const sys = o.dryRun ? dryRunSys(o.sys ?? realSys) : (o.sys ?? realSys);
+  const sys = o.sys ?? realSys;
   const backend = typeof o.backend === "object" ? o.backend : selectBackend(env, sys, o.backend);
   return { env, sys, backend };
 }

@@ -134,3 +134,10 @@ test("bin: real spawn renders schtasks on this host and maps INVALID_SPEC to 2",
   const bad = spawnSync(process.execPath, [cli, "render", join(FIX, "bad.json")], { encoding: "utf8" });
   expect(bad.status).toBe(2);
 });
+
+test.skipIf(process.platform === "win32")("bin: a reader closing the pipe early exits quietly", () => {
+  const cli = join(import.meta.dir, "../src/cli.ts");
+  const r = spawnSync("sh", ["-c", `"$0" "$1" render "$2" --backend schtasks | true`, process.execPath, cli, intake], { encoding: "utf8" });
+  expect(r.status).toBe(0);
+  expect(r.stderr).not.toContain("EPIPE");
+});

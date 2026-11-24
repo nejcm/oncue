@@ -50,8 +50,8 @@ test("dryRunSys logs mutations and passes reads through", () => {
 
 test("realSys read decodes UTF-16LE files with a BOM, keeping the BOM", () => {
   const f = join(root, "t.xml");
-  realSys.write(f, Buffer.from("﻿<a>ü</a>", "utf16le"));
-  expect(realSys.read(f)).toBe("﻿<a>ü</a>");
-  realSys.write(f, "﻿utf8 ü");
-  expect(realSys.read(f)).toBe("﻿utf8 ü");
+  realSys.write(f, Buffer.from("\ufeff<a>ü</a>", "utf16le"));
+  expect(realSys.read(f)).toBe("\ufeff<a>ü</a>");
+  realSys.write(f, "\ufeffutf8 ü");
+  expect(realSys.read(f)).toBe("\ufeffutf8 ü");
 });
