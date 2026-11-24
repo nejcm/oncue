@@ -1,6 +1,6 @@
 {
   "name": "@nejcm/oncue",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Install jobs into the native OS scheduler: systemd, launchd, Task Scheduler",
   "keywords": [
     "bun",
@@ -12,8 +12,16 @@
     "task-scheduler",
     "timer"
   ],
+  "homepage": "https://github.com/nejcm/oncue#readme",
+  "bugs": {
+    "url": "https://github.com/nejcm/oncue/issues"
+  },
   "license": "MIT",
   "author": "nejcm",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nejcm/oncue.git"
+  },
   "bin": {
     "oncue": "./src/cli.ts"
   },

@@ -18,7 +18,7 @@ oncue turns a small, OS-neutral job description (command, working directory, env
 Requires [Bun](https://bun.sh). The package is not published to npm; add it as a git or local dependency:
 
 ```sh
-bun add git+https://<host>/<owner>/oncue.git   # this repository
+bun add github:nejcm/oncue#v0.1.0               # this repository, pinned to a tag
 bun add file:/path/to/oncue                    # a local clone
 ```
 
