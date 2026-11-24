@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- managed-by oncue tender/prs -->
+<plist version="1.0"><dict>
+<key>Label</key><string>tender.prs</string>
+<key>WorkingDirectory</key><string>/home/u/Work/agent-workflow</string>
+<key>ProgramArguments</key><array><string>/home/u/.bun/bin/bun</string><string>tender.ts</string><string>prs</string><string>--config</string><string>tender.json</string></array>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/home/u/.bun/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+<key>StandardOutPath</key><string>/home/u/Library/Logs/tender-prs.log</string>
+<key>StandardErrorPath</key><string>/home/u/Library/Logs/tender-prs.log</string>
+<key>StartCalendarInterval</key><dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>9</integer><key>Minute</key><integer>0</integer></dict>
+</dict></plist>

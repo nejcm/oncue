@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- managed-by oncue shape/calendar-multi -->
+<plist version="1.0"><dict>
+<key>Label</key><string>shape.calendar-multi</string>
+<key>WorkingDirectory</key><string>/tmp</string>
+<key>ProgramArguments</key><array><string>/usr/bin/true</string></array>
+<key>StandardOutPath</key><string>/home/u/Library/Logs/shape-calendar-multi.log</string>
+<key>StandardErrorPath</key><string>/home/u/Library/Logs/shape-calendar-multi.log</string>
+<key>StartCalendarInterval</key><array><dict><key>Minute</key><integer>5</integer></dict><dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>30</integer></dict><dict><key>Day</key><integer>1</integer><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict><dict><key>Weekday</key><integer>0</integer><key>Minute</key><integer>45</integer></dict></array>
+</dict></plist>

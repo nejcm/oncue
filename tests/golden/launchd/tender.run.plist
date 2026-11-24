@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- managed-by oncue tender/run -->
+<plist version="1.0"><dict>
+<key>Label</key><string>tender.run</string>
+<key>WorkingDirectory</key><string>/home/u/Work/agent-workflow</string>
+<key>ProgramArguments</key><array><string>/home/u/.bun/bin/bun</string><string>tender.ts</string><string>run</string><string>--config</string><string>tender.json</string></array>
+<key>EnvironmentVariables</key><dict><key>PATH</key><string>/home/u/.bun/bin:/home/u/.local/bin:/usr/local/bin:/usr/bin:/bin</string></dict>
+<key>StandardOutPath</key><string>/home/u/Library/Logs/tender-run.log</string>
+<key>StandardErrorPath</key><string>/home/u/Library/Logs/tender-run.log</string>
+<key>KeepAlive</key><dict><key>SuccessfulExit</key><false/></dict><key>ThrottleInterval</key><integer>30</integer>
+<key>AbandonProcessGroup</key><true/>
+</dict></plist>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- managed-by oncue shape/daily -->
+<plist version="1.0"><dict>
+<key>Label</key><string>shape.daily</string>
+<key>WorkingDirectory</key><string>/tmp</string>
+<key>ProgramArguments</key><array><string>/usr/bin/true</string></array>
+<key>StandardOutPath</key><string>/home/u/Library/Logs/shape-daily.log</string>
+<key>StandardErrorPath</key><string>/home/u/Library/Logs/shape-daily.log</string>
+<key>StartCalendarInterval</key><dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>0</integer></dict>
+</dict></plist>
