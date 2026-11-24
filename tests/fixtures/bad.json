@@ -1,0 +1,1 @@
+{ "namespace": "tender", "name": "Bad Name", "command": [], "cwd": "relative", "schedule": { "kind": "interval", "minutes": 0 } }

@@ -1,9 +1,10 @@
 import { homedir } from "node:os";
 import { OnCueError } from "./errors.ts";
 import { which } from "./path.ts";
+import { BACKENDS } from "./backends/index.ts";
 import { selectBackend } from "./select.ts";
 import { dryRunSys, realSys } from "./sys.ts";
-import type { Backend, Env, JobRef, Status, Sys } from "./types.ts";
+import type { Backend, Env, JobRef, Rendered, Status, Sys } from "./types.ts";
 import { validateJob, validateName } from "./validate.ts";
 
 export const VERSION = "0.0.0";
@@ -40,6 +41,26 @@ export function install(spec: unknown, o: Options = {}): { changed: boolean; war
   if (!exe) throw new OnCueError("NOT_FOUND", `${job.command[0]} not found on PATH`);
   const { env, sys, backend } = setup(o);
   return backend.install(validateJob({ ...job, command: [exe, ...job.command.slice(1)] }, { install: true }), env, sys);
+}
+
+const placeholderEnv = (platform: NodeJS.Platform): Env => ({
+  platform,
+  home: "/home/user",
+  uid: 501,
+  localAppData: "C:\\Users\\user\\AppData\\Local",
+  user: "PC\\user",
+});
+
+/** Validates `spec` and renders it without touching the system; a backend for another OS renders with placeholder paths. */
+export function render(spec: unknown, o: Pick<Options, "backend" | "env"> = {}): Rendered {
+  const job = validateJob(spec);
+  const host = o.env ?? hostEnv();
+  const backend =
+    typeof o.backend === "object" ? o.backend : BACKENDS.find((b) => (o.backend === undefined ? b.platforms.includes(host.platform) : b.id === o.backend));
+  if (!backend) throw new OnCueError("NO_BACKEND", o.backend === undefined ? `no scheduler for ${host.platform}` : `unknown backend ${JSON.stringify(o.backend)}`);
+  if (backend.platforms.includes(host.platform)) return backend.render(job, host);
+  const r = backend.render(job, placeholderEnv(backend.platforms[0]!));
+  return { ...r, warnings: [...r.warnings, `rendered for ${backend.platforms.join("/")} on ${host.platform}: paths, uid and user are placeholders`] };
 }
 
 export function uninstall(r: JobRef, o: Options = {}): { removed: boolean } {

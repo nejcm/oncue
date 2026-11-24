@@ -1,0 +1,8 @@
+{
+  "namespace": "tender",
+  "name": "intake",
+  "description": "tender: run the intake rules enabled for this host",
+  "command": ["bun", "tender.ts", "intake", "--config", "tender.json"],
+  "cwd": "/home/u/Work/agent-workflow",
+  "schedule": { "kind": "interval", "minutes": 15 }
+}
