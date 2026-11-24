@@ -1,0 +1,10 @@
+# managed-by oncue shape/five-hourly
+[Unit]
+Description=shape/five-hourly
+
+[Timer]
+OnStartupSec=300min
+OnUnitActiveSec=300min
+
+[Install]
+WantedBy=timers.target

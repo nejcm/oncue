@@ -5,7 +5,7 @@ Description=100%% <odd> & "quoted" 'job' ünï
 [Service]
 Type=oneshot
 WorkingDirectory=/home/u/dir with spaces/100%%
-ExecStart="/opt/my tools/run" "$$HOME" "%%h" "say \"hi\"" "it's" "a&b<c>d" "back\\slash" "ünïcödé ✓" ""
+ExecStart="/opt/my $tools/run" "$$HOME" "%%h" "say \"hi\"" "it's" "a&b<c>d" "back\\slash" "ünïcödé ✓" ""
 Environment="A=$x %%i \"q\" 's' \\ & <>"
 Environment="EMPTY="
 Environment="UNI=日本"

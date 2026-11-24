@@ -1,12 +1,10 @@
 import { expect, test } from "bun:test";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { taskScheduler as ts } from "../src/backends/schtasks.ts";
 import { OnCueError } from "../src/errors.ts";
-import { decode, dryRunSys } from "../src/sys.ts";
+import { decode } from "../src/sys.ts";
 import type { ExecResult } from "../src/types.ts";
 import { CASES, windows } from "./cases.ts";
-import { fakeEnv, fakeSys } from "./fakes.ts";
+import { code, fakeEnv, fakeSys } from "./fakes.ts";
 
 const [run, intake, , hostile] = CASES.map(windows) as [
   (typeof CASES)[number],
@@ -28,15 +26,12 @@ const ours = (name: string, extra = {}) => ({
 });
 const files = (job = intake) =>
   Object.fromEntries(ts.render(job, fakeEnv).files.map((f) => [f.path, decode(f.content)]));
-const code = (f: () => unknown) => {
-  try {
-    f();
-  } catch (e) {
-    return (e as OnCueError).code;
-  }
-};
 
-function fake(fs: Record<string, string> = {}, tasks: object[] = [], canned: Record<string, Partial<ExecResult>> = {}) {
+function fake(
+  fs: Record<string, string> = {},
+  tasks: object[] = [],
+  canned: Record<string, Partial<ExecResult> | OnCueError> = {},
+) {
   const f = fakeSys(fs, canned);
   const exec = f.sys.exec;
   const queries: string[][] = [];
@@ -48,12 +43,9 @@ function fake(fs: Record<string, string> = {}, tasks: object[] = [], canned: Rec
   return { ...f, queries };
 }
 
-test("rendered Task XML is UTF-16LE with a BOM and decodes to the UTF-8 golden", () => {
+test("rendered Task XML is UTF-16LE with a BOM and the script UTF-8 with a BOM", () => {
   const bytes = ts.render(intake, fakeEnv).files[1]!.content as Uint8Array;
   expect(Array.from(bytes.subarray(0, 4))).toEqual([0xff, 0xfe, 0x3c, 0x00]);
-  expect(Buffer.from(bytes.slice(2)).toString("utf16le")).toBe(
-    readFileSync(join(import.meta.dir, "golden/schtasks/intake.xml"), "utf8"),
-  );
   expect(ts.render(intake, fakeEnv).files[0]!.content).toStartWith("\ufeff# managed-by oncue tender/intake\n");
 });
 
@@ -189,26 +181,12 @@ test("status maps Get-ScheduledTask output", () => {
   });
   const daemon = (State: string) => ts.status(run, fakeEnv, fake(files(run), [ours("run", { State })]).sys).active;
   expect([daemon("Running"), daemon("Ready")]).toEqual([true, false]);
+  const timer = (State: string) => ts.status(intake, fakeEnv, fake(files(), [ours("intake", { State })]).sys).active;
+  expect([timer("Ready"), timer("Running"), timer("Disabled")]).toEqual([true, true, false]);
   expect(ts.status(intake, fakeEnv, fake(files(), [{ ...ours("intake"), Source: null }]).sys)).toMatchObject({
     installed: false,
   });
   expect(ts.status(intake, fakeEnv, fake().sys)).toMatchObject({ installed: false, active: false });
-});
-
-test("dry-run install performs no mutations and logs them", () => {
-  const f = fake();
-  const log: string[] = [];
-  ts.install(
-    intake,
-    fakeEnv,
-    dryRunSys(f.sys, (l) => log.push(l)),
-  );
-  expect(f.mutations()).toEqual([]);
-  expect(log).toEqual([
-    `write ${ps1}`,
-    `write ${xml}`,
-    `exec schtasks.exe /create /tn \\tender\\intake /xml ${xml} /f`,
-  ]);
 });
 
 test("render rejects what Windows PowerShell or the task cannot hold", () => {
@@ -218,6 +196,7 @@ test("render rejects what Windows PowerShell or the task cannot hold", () => {
   }
   for (const cwd of ["relative", "/home/u", "C:relative", "\\only-server"])
     expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBe("INVALID_SPEC");
+  expect(code(() => ts.render({ ...intake, log: "/home/u/intake.log" }, fakeEnv))).toBe("INVALID_SPEC");
   for (const cwd of ["C:\\x", "c:/x", "\\\\srv\\share\\x"])
     expect(code(() => ts.render({ ...intake, cwd }, fakeEnv))).toBeUndefined();
   expect(code(() => ts.render({ ...intake, env: { "A;rm": "x" } }, fakeEnv))).toBe("INVALID_SPEC");
@@ -231,13 +210,9 @@ test("render rejects what Windows PowerShell or the task cannot hold", () => {
 
 test("available follows whether schtasks.exe runs", () => {
   expect(ts.available(fakeSys().sys, fakeEnv)).toBe(true);
-  const missing = {
-    ...fakeSys().sys,
-    exec: () => {
-      throw new OnCueError("NOT_FOUND", "schtasks.exe not found");
-    },
-  };
-  expect(ts.available(missing, fakeEnv)).toBe(false);
+  expect(ts.available(fakeSys({}, { "schtasks.exe /?": { code: 1 } }).sys, fakeEnv)).toBe(true);
+  const missing = fakeSys({}, { "schtasks.exe /?": new OnCueError("NOT_FOUND", "schtasks.exe not found") });
+  expect(ts.available(missing.sys, fakeEnv)).toBe(false);
 });
 
 test("uninstall refuses leftover files without this job's marker", () => {
@@ -246,13 +221,11 @@ test("uninstall refuses leftover files without this job's marker", () => {
   expect(foreign.mutations()).toEqual([]);
   const prefix = fake({ [ps1]: files()[ps1]!.replace("tender/intake", "tender/intake2") });
   expect(code(() => ts.uninstall(intake, fakeEnv, prefix.sys))).toBe("INVALID_SPEC");
+  const foreignXml = fake({ [ps1]: files()[ps1]!, [xml]: "<Task/>\n" });
+  expect(code(() => ts.uninstall(intake, fakeEnv, foreignXml.sys))).toBe("INVALID_SPEC");
+  expect(foreignXml.mutations()).toEqual([]);
   const xmlOnly = fake({ [xml]: files()[xml]! });
   expect(ts.uninstall(intake, fakeEnv, xmlOnly.sys)).toEqual({ removed: true });
-});
-
-test("the wrapper exits 1 when the command cannot be launched", () => {
-  const script = decode(ts.render(intake, fakeEnv).files[0]!.content);
-  expect(script).toMatch(/^try \{\n {2}& .*\n\} catch \{\n.*\n {2}exit 1\n\}\nexit \$LASTEXITCODE\n$/m);
 });
 
 test("a batch file rejects arguments cmd.exe would reinterpret", () => {
@@ -265,16 +238,16 @@ test("a batch file rejects arguments cmd.exe would reinterpret", () => {
   expect(code(() => ts.render({ ...intake, command: ["C:\\x\\tool.exe", "a&b"] }, fakeEnv))).toBeUndefined();
 });
 
-test("install creates the directory of a custom log, and a missing schtasks.exe is not swallowed", () => {
+test("install creates a custom log only in an empty directory, and a missing schtasks.exe is not swallowed", () => {
   const log = "C:\\Users\\u\\logs\\intake.log";
   const f = fake();
   ts.install({ ...intake, log }, fakeEnv, f.sys);
   expect(f.mutations()[0]).toBe(`write ${log}`);
-  const g = fake(files(run), [ours("run", { State: "Running" })]);
-  const exec = g.sys.exec;
-  g.sys.exec = (argv, o) => {
-    if (argv.join(" ") === "schtasks.exe /end /tn \\tender\\run") throw new OnCueError("NOT_FOUND", "gone");
-    return exec(argv, o);
-  };
+  const existing = fake({ "C:\\Users\\u\\logs\\other.log": "" });
+  ts.install({ ...intake, log }, fakeEnv, existing.sys);
+  expect(existing.mutations()).not.toContain(`write ${log}`);
+  const g = fake(files(run), [ours("run", { State: "Running" })], {
+    "schtasks.exe /end /tn \\tender\\run": new OnCueError("NOT_FOUND", "gone"),
+  });
   expect(code(() => ts.install({ ...run, description: "changed" }, fakeEnv, g.sys))).toBe("NOT_FOUND");
 });

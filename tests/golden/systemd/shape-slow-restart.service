@@ -1,0 +1,13 @@
+# managed-by oncue shape/slow-restart
+[Unit]
+Description=shape/slow-restart
+
+[Service]
+Type=simple
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"
+Restart=on-failure
+RestartSec=90
+
+[Install]
+WantedBy=default.target

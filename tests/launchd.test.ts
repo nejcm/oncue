@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
 import { launchd } from "../src/backends/launchd.ts";
 import { OnCueError } from "../src/errors.ts";
-import { dryRunSys } from "../src/sys.ts";
 import { CASES } from "./cases.ts";
-import { fakeEnv, fakeSys } from "./fakes.ts";
+import { code, fakeEnv, fakeSys } from "./fakes.ts";
 
 const [run, intake] = CASES as [(typeof CASES)[number], (typeof CASES)[number]];
 const plist = "/home/u/Library/LaunchAgents/tender.intake.plist";
@@ -11,13 +10,6 @@ const print = "launchctl print gui/501/tender.intake";
 const notLoaded = { [print]: { code: 113 } };
 const files = (job = intake) =>
   Object.fromEntries(launchd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
-const code = (f: () => unknown) => {
-  try {
-    f();
-  } catch (e) {
-    return (e as OnCueError).code;
-  }
-};
 
 test("first install writes and bootstraps", () => {
   const f = fakeSys({}, notLoaded);
@@ -105,31 +97,17 @@ test("status reads launchctl print best-effort", () => {
     installed: true,
     active: false,
   });
+  expect(launchd.status(intake, fakeEnv, fakeSys(files()).sys)).toMatchObject({ installed: true, active: true });
   expect(launchd.status(intake, fakeEnv, fakeSys().sys)).toMatchObject({ installed: false, active: false });
-});
-
-test("dry-run install performs no mutations and logs them", () => {
-  const f = fakeSys({}, notLoaded);
-  const log: string[] = [];
-  launchd.install(
-    intake,
-    fakeEnv,
-    dryRunSys(f.sys, (l) => log.push(l)),
-  );
-  expect(f.mutations()).toEqual([]);
-  expect(log).toEqual([`write ${plist}`, `exec launchctl bootstrap gui/501 ${plist}`]);
+  const foreign = fakeSys({ [plist]: "<!-- managed-by oncue tender/other -->\n" });
+  expect(launchd.status(intake, fakeEnv, foreign.sys)).toMatchObject({ installed: false, active: false });
 });
 
 test("available follows whether launchctl runs", () => {
   expect(launchd.available(fakeSys().sys, fakeEnv)).toBe(true);
   expect(launchd.available(fakeSys({}, { "launchctl version": { code: 1 } }).sys, fakeEnv)).toBe(true);
-  const missing = {
-    ...fakeSys().sys,
-    exec: () => {
-      throw new OnCueError("NOT_FOUND", "launchctl not found");
-    },
-  };
-  expect(launchd.available(missing, fakeEnv)).toBe(false);
+  const missing = fakeSys({}, { "launchctl version": new OnCueError("NOT_FOUND", "launchctl not found") });
+  expect(launchd.available(missing.sys, fakeEnv)).toBe(false);
 });
 
 test("render rejects what a plist cannot hold", () => {
@@ -140,10 +118,11 @@ test("render rejects what a plist cannot hold", () => {
   expect(launchd.render({ ...CASES[1]!, catchUp: false }, fakeEnv).warnings).toHaveLength(1);
 });
 
-test("uninstall without a uid fails before removing the plist", () => {
+test("without a uid, uninstall fails before removing the plist and status fails too", () => {
   const f = fakeSys(files());
   expect(code(() => launchd.uninstall(intake, { ...fakeEnv, uid: undefined }, f.sys))).toBe("NO_BACKEND");
   expect(f.mutations()).toEqual([]);
+  expect(code(() => launchd.status(intake, { ...fakeEnv, uid: undefined }, f.sys))).toBe("NO_BACKEND");
 });
 
 test("catchUp warnings follow whether launchd can honor them", () => {

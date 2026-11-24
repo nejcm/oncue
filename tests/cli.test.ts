@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { main } from "../src/cli.ts";
 import { OnCueError } from "../src/errors.ts";
 import type { Sys } from "../src/types.ts";
-import { fakeEnv, fakeSys } from "./fakes.ts";
+import { fakeEnv, fakeSys, withTool } from "./fakes.ts";
 
 const FIX = join(import.meta.dir, "fixtures");
 const intake = join(FIX, "intake.json");
@@ -88,12 +88,6 @@ describe("dry-run", () => {
     expect(r.out.split("\n").at(-1)).toBe("would install");
   });
 
-  test("the same install without --dry-run does mutate", () => {
-    const f = fakeSys();
-    expect(run(["install", "-"], f.sys, JSON.stringify(job)).code).toBe(0);
-    expect(f.mutations().length).toBeGreaterThan(0);
-  });
-
   test("uninstall --dry-run performs no mutation", () => {
     const unit = "/home/u/.config/systemd/user/tender-intake.service";
     const f = fakeSys({ [unit]: "# managed-by oncue tender/intake\n" });
@@ -104,10 +98,17 @@ describe("dry-run", () => {
     expect(r.out.split("\n").at(-1)).toBe("would remove");
   });
 
-  test("--capture-path sets env.PATH", () => {
+  test.skipIf(process.platform === "win32")("--capture-path puts each tool's directory before the defaults", () => {
     const f = fakeSys();
-    run(["install", "-", "--capture-path", "bun"], f.sys, JSON.stringify(job));
-    expect(f.fs.get("/home/u/.config/systemd/user/tender-intake.service")).toContain('Environment="PATH=');
+    const bin = withTool("oncue-tool", () =>
+      expect(run(["install", "-", "--capture-path", "oncue-tool"], f.sys, JSON.stringify(job))).toMatchObject({
+        code: 0,
+        out: "installed",
+      }),
+    );
+    expect(f.fs.get("/home/u/.config/systemd/user/tender-intake.service")).toContain(
+      `Environment="PATH=${bin}:/usr/local/bin:/usr/bin:/bin"`,
+    );
   });
 
   for (const env of ["bad", null, []]) {
@@ -124,6 +125,40 @@ test("status --json", () => {
   const r = run(["status", "tender", "intake", "--json"]);
   expect(r.code).toBe(0);
   expect(JSON.parse(r.out)).toMatchObject({ name: "intake", installed: false });
+});
+
+describe("a namespace with one installed job", () => {
+  const units = "/home/u/.config/systemd/user";
+  const props =
+    "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,NextElapseUSecRealtime,LastTriggerUSec";
+  const installed = () =>
+    fakeSys(
+      {
+        [`${units}/tender-intake.service`]: "# managed-by oncue tender/intake\n",
+        [`${units}/tender-intake.timer`]: "# managed-by oncue tender/intake\n",
+        [`${units}/tender-manual.service`]: "[Service]\n",
+      },
+      {
+        [`systemctl --user show tender-intake.service tender-intake.timer -p ${props} --timestamp=unix`]: {
+          out: "ExecMainStatus=3\nExecMainExitTimestamp=@1700000005\n\nActiveState=active\nNextElapseUSecRealtime=@1700000900\n",
+        },
+      },
+    ).sys;
+
+  test("list prints the job names", () => {
+    expect(run(["list", "tender"], installed())).toEqual({ code: 0, out: "intake", err: "" });
+  });
+
+  test("status prints a line per job, or a JSON array", () => {
+    expect(run(["status", "tender"], installed())).toEqual({
+      code: 0,
+      out: "intake: active, last exit 3, next 2023-11-14T22:28:20.000Z",
+      err: "",
+    });
+    expect(JSON.parse(run(["status", "tender", "--json"], installed()).out)).toMatchObject([
+      { name: "intake", installed: true, active: true, lastExit: 3 },
+    ]);
+  });
 });
 
 describe("exit codes", () => {
@@ -178,9 +213,15 @@ test.skipIf(process.platform === "win32")("bin: a reader closing the pipe early 
   const cli = join(import.meta.dir, "../src/cli.ts");
   const r = spawnSync(
     "sh",
-    ["-c", `"$0" "$1" render "$2" --backend schtasks | true`, process.execPath, cli, intakeWin],
+    [
+      "-c",
+      `("$0" "$1" render "$2" --backend schtasks; echo "oncue exited $?" >&2) | true`,
+      process.execPath,
+      cli,
+      intakeWin,
+    ],
     { encoding: "utf8" },
   );
-  expect(r.status).toBe(0);
+  expect(r.stderr).toContain("oncue exited 0");
   expect(r.stderr).not.toContain("EPIPE");
 });

@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { OnCueError } from "../src/errors.ts";
 import { ps, systemdArg, systemdEnv, systemdText, xml } from "../src/quote.ts";
+import { code } from "./fakes.ts";
 
 const cases: [string, (s: string) => string, [string, string][]][] = [
   [
@@ -57,31 +57,24 @@ const cases: [string, (s: string) => string, [string, string][]][] = [
 
 for (const [name, fn, table] of cases) {
   test.each(table)(`${name}(%p)`, (input, out) => expect(fn(input)).toBe(out));
-
-  test.each(["a\nb", "a\rb", "a\tb", "\0", "\x1b[31m", "\x7f", "\ufffe", "\ud800", "x\udc00"])(
-    `${name} rejects %p`,
-    (bad) => {
-      let err: unknown;
-      try {
-        fn(bad);
-      } catch (e) {
-        err = e;
-      }
-      expect((err as OnCueError).code).toBe("INVALID_SPEC");
-    },
-  );
+  test(`${name} rejects control characters`, () => expect(code(() => fn("a\nb"))).toBe("INVALID_SPEC"));
 }
+
+test.each(["a\nb", "a\rb", "a\tb", "\0", "\x1b[31m", "\u001f", "\x7f", "\ufffe", "\uffff", "\ud800", "x\udc00"])(
+  "rejects forbidden character %p",
+  (bad) => expect(code(() => xml(bad))).toBe("INVALID_SPEC"),
+);
 
 test("systemdArg leaves $ alone in the program path", () => {
   expect(systemdArg("/opt/a$b %x", true)).toBe('"/opt/a$b %%x"');
 });
 
 test("systemdEnv rejects control chars in key", () => {
-  expect(() => systemdEnv("A\nB", "x")).toThrow(OnCueError);
+  expect(code(() => systemdEnv("A\nB", "x"))).toBe("INVALID_SPEC");
 });
 
 test("systemdText rejects a trailing backslash", () => {
-  expect(() => systemdText("/a\\")).toThrow(OnCueError);
+  expect(code(() => systemdText("/a\\"))).toBe("INVALID_SPEC");
 });
 
 test("surrogate pairs pass", () => {

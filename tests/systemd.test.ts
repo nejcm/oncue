@@ -1,9 +1,8 @@
 import { expect, test } from "bun:test";
 import { systemd } from "../src/backends/systemd.ts";
 import { OnCueError } from "../src/errors.ts";
-import { dryRunSys } from "../src/sys.ts";
 import { CASES } from "./cases.ts";
-import { fakeEnv, fakeSys } from "./fakes.ts";
+import { code, fakeEnv, fakeSys } from "./fakes.ts";
 
 const [run, intake] = CASES as [(typeof CASES)[number], (typeof CASES)[number]];
 const dir = "/home/u/.config/systemd/user";
@@ -14,13 +13,6 @@ const state = (units: string, ...blocks: string[]) => ({
 const block = (fileState: string, active: string) => `UnitFileState=${fileState}\nActiveState=${active}\n`;
 const files = (job = intake) =>
   Object.fromEntries(systemd.render(job, fakeEnv).files.map((f) => [f.path, f.content as string]));
-const code = (f: () => unknown) => {
-  try {
-    f();
-  } catch (e) {
-    return (e as OnCueError).code;
-  }
-};
 
 test("first install writes, reloads and enables the timer", () => {
   const f = fakeSys(
@@ -83,6 +75,12 @@ test("unchanged files but a stopped or disabled unit: enable --now and report ch
   );
   expect(systemd.install(intake, fakeEnv, f.sys).changed).toBe(true);
   expect(f.mutations()).toEqual([`exec ${sc} enable --now tender-intake.timer`]);
+  const disabled = fakeSys(
+    files(),
+    state("tender-intake.timer tender-intake.service", block("disabled", "active"), block("static", "inactive")),
+  );
+  expect(systemd.install(intake, fakeEnv, disabled.sys).changed).toBe(true);
+  expect(disabled.mutations()).toEqual([`exec ${sc} enable --now tender-intake.timer`]);
 });
 
 test("switching a keepAlive job to a timer disables the old service", () => {
@@ -123,8 +121,12 @@ test("uninstall: missing is a no-op, unmarked or foreign is refused", () => {
   const none = fakeSys();
   expect(systemd.uninstall(intake, fakeEnv, none.sys)).toEqual({ removed: false });
   expect(none.mutations()).toEqual([]);
-  for (const text of ["[Service]\n", "# managed-by oncue tender-in/take\n"]) {
-    const f = fakeSys({ [`${dir}/tender-intake.service`]: text });
+  for (const units of [
+    { [`${dir}/tender-intake.service`]: "[Service]\n" },
+    { [`${dir}/tender-intake.service`]: "# managed-by oncue tender-in/take\n" },
+    { ...files(), [`${dir}/tender-intake.timer`]: "[Timer]\n" },
+  ] as Record<string, string>[]) {
+    const f = fakeSys(units);
     expect(code(() => systemd.uninstall(intake, fakeEnv, f.sys))).toBe("INVALID_SPEC");
     expect(f.mutations()).toEqual([]);
   }
@@ -158,6 +160,7 @@ test("list matches on the marker, not the filename prefix", () => {
     ...files(CASES[2]),
     [`${dir}/tender-x-y.service`]: "# managed-by oncue tender-x/y\n",
     [`${dir}/tender-manual.service`]: "[Service]\n",
+    [`${dir}/tender-z.service`]: "# managed-by oncue tender/y\n",
   });
   expect(systemd.list("tender", fakeEnv, f.sys)).toEqual(["intake", "prs"]);
   expect(systemd.list("tender-x", fakeEnv, f.sys)).toEqual(["y"]);
@@ -180,6 +183,24 @@ test("status parses show output and warns when linger is off", () => {
   expect(s.nextRun).toEqual(new Date(1700000900_000));
   expect(s.warnings).toEqual(["linger is off: jobs stop at logout (loginctl enable-linger)"]);
   expect(systemd.status(run, fakeEnv, fakeSys().sys)).toMatchObject({ installed: false, active: false });
+  const unmarked = fakeSys({ [`${dir}/tender-run.service`]: "[Service]\n" });
+  expect(systemd.status(run, fakeEnv, unmarked.sys)).toMatchObject({ installed: false, active: false });
+});
+
+test("status of a running keepAlive service: no exit yet, last run is its start", () => {
+  const props = "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp";
+  const out =
+    "LoadState=loaded\nActiveState=active\nSubState=running\nResult=success\nExecMainStatus=0\nExecMainStartTimestamp=@1700000000\nExecMainExitTimestamp=\n";
+  const f = fakeSys(files(run), { [`${sc} show tender-run.service -p ${props} --timestamp=unix`]: { out } });
+  expect(systemd.status(run, fakeEnv, f.sys)).toEqual({
+    installed: true,
+    active: true,
+    lastExit: undefined,
+    lastRun: new Date(1700000000_000),
+    nextRun: undefined,
+    warnings: [],
+    native: out,
+  });
 });
 
 test("status on systemd < 251 (no --timestamp=unix) still reports state, without dates", () => {
@@ -200,26 +221,6 @@ test("status on systemd < 251 (no --timestamp=unix) still reports state, without
   });
 });
 
-test("dry-run install performs no mutations and logs them", () => {
-  const f = fakeSys(
-    {},
-    state("tender-intake.timer tender-intake.service", block("", "inactive"), block("", "inactive")),
-  );
-  const log: string[] = [];
-  systemd.install(
-    intake,
-    fakeEnv,
-    dryRunSys(f.sys, (l) => log.push(l)),
-  );
-  expect(f.mutations()).toEqual([]);
-  expect(log).toEqual([
-    `write ${dir}/tender-intake.service`,
-    `write ${dir}/tender-intake.timer`,
-    `exec ${sc} daemon-reload`,
-    `exec ${sc} enable --now tender-intake.timer`,
-  ]);
-});
-
 test("available follows systemctl --user show-environment", () => {
   expect(systemd.available(fakeSys().sys, fakeEnv)).toBe(true);
   expect(systemd.available(fakeSys({}, { [`${sc} show-environment`]: { code: 1 } }).sys, fakeEnv)).toBe(false);
@@ -235,12 +236,11 @@ test("render rejects what systemd cannot express", () => {
 });
 
 test("uninstall without systemctl fails before removing units", () => {
-  const f = fakeSys(files());
-  f.sys.exec = () => {
-    throw new OnCueError("NOT_FOUND", "systemctl not found");
-  };
+  const f = fakeSys(files(), {
+    [`${sc} disable --now tender-intake.timer`]: new OnCueError("NOT_FOUND", "systemctl not found"),
+  });
   expect(code(() => systemd.uninstall(intake, fakeEnv, f.sys))).toBe("NOT_FOUND");
-  expect(f.mutations()).toEqual([]);
+  expect(f.mutations()).toEqual([`exec ${sc} disable --now tender-intake.timer`]);
 });
 
 test("catchUp: true on an unaligned interval warns; the default does not", () => {

@@ -23,6 +23,8 @@ beforeAll(() => {
     [a, "gh", 0o755],
     [b, "gh.cmd", 0o644],
     [b, "bun.EXE", 0o644],
+    [a, "git.cmd", 0o644],
+    [a, "git.exe", 0o644],
   ] as const) {
     writeFileSync(join(dir, file), "");
     chmodSync(join(dir, file), mode);
@@ -39,7 +41,7 @@ posixOnly("posix: first executable on PATH wins, non-executables skipped", () =>
   expect(which(join(a, "tool"), "")).toBe(join(a, "tool"));
 });
 
-test("windows: PATHEXT search, ; separator, extensionless shims ignored", () => {
+test("windows: PATHEXT search in PATHEXT order, ; separator, extensionless shims ignored", () => {
   const PATH = `${a};${b}`;
   const PATHEXT = ".com;.exe;.bat;.cmd";
   expect(which("gh", PATH, PATHEXT)).toBe(join(b, "gh.cmd"));
@@ -47,6 +49,7 @@ test("windows: PATHEXT search, ; separator, extensionless shims ignored", () => 
   expect(which("tool", PATH, PATHEXT)).toBeUndefined();
   expect(which("dir", PATH, PATHEXT)).toBeUndefined();
   expect(which("gh", PATH, ".bat")).toBeUndefined();
+  expect(which("git", PATH, PATHEXT)).toBe(join(a, "git.exe"));
 });
 
 test("empty cmd resolves to nothing", () => {
@@ -55,7 +58,7 @@ test("empty cmd resolves to nothing", () => {
 });
 
 posixOnly("non-win32 host defaults to posix rules", () => {
-  expect(which("tool", `${a}:${b}`)).toBe(which("tool", `${a}:${b}`, ""));
+  expect(which("gh", `${a}:${b}`)).toBe(join(a, "gh"));
 });
 
 test.skipIf(process.platform !== "win32")("win32 host defaults to PATHEXT rules", () => {
@@ -79,6 +82,8 @@ posixOnly("capturePath: tool dirs then defaults, deduplicated", () => {
 });
 
 test("capturePath: windows joins with ; and has no defaults", () => {
-  expect(capturePath(["gh", "tool"], undefined, { PATH: `${a};${b}`, PATHEXT: ".cmd", platform: "win32" })).toBe(b);
+  expect(capturePath(["gh", "git", "tool"], undefined, { PATH: `${a};${b}`, PATHEXT: ".cmd", platform: "win32" })).toBe(
+    `${b};${a}`,
+  );
   expect(capturePath([], undefined, { PATH: "", platform: "win32" })).toBe("");
 });

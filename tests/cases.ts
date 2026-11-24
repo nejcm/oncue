@@ -37,7 +37,7 @@ export const CASES: Job[] = [
     namespace: "hostile",
     name: "argv",
     description: "100% <odd> & \"quoted\" 'job' ünï",
-    command: ["/opt/my tools/run", "$HOME", "%h", 'say "hi"', "it's", "a&b<c>d", "back\\slash", "ünïcödé ✓", ""],
+    command: ["/opt/my $tools/run", "$HOME", "%h", 'say "hi"', "it's", "a&b<c>d", "back\\slash", "ünïcödé ✓", ""],
     cwd: "/home/u/dir with spaces/100%",
     env: { A: "$x %i \"q\" 's' \\ & <>", EMPTY: "", UNI: "日本" },
     log: "/home/u/logs/my job %.log",
@@ -48,12 +48,15 @@ export const CASES: Job[] = [
   shape("two-hourly", { kind: "interval", minutes: 120 }),
   shape("daily", { kind: "interval", minutes: 1440 }),
   shape("unaligned", { kind: "interval", minutes: 90 }),
+  shape("five-hourly", { kind: "interval", minutes: 300 }),
   shape("no-catchup", { kind: "interval", minutes: 30 }, { catchUp: false }),
   shape("calendar-multi", {
     kind: "calendar",
     at: [{ minute: 5 }, { hour: 0, minute: 30 }, { day: 1, hour: 6, minute: 0 }, { weekday: "sun", minute: 45 }],
   }),
   shape("always", { kind: "keepAlive", restart: "always" }),
+  shape("no-delay", { kind: "keepAlive", restart: "always", delaySeconds: 0 }),
+  shape("slow-restart", { kind: "keepAlive", restart: "on-failure", delaySeconds: 90 }),
 ];
 
 const HOSTILE_WIN: Job = {

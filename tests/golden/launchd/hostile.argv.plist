@@ -4,7 +4,7 @@
 <plist version="1.0"><dict>
 <key>Label</key><string>hostile.argv</string>
 <key>WorkingDirectory</key><string>/home/u/dir with spaces/100%</string>
-<key>ProgramArguments</key><array><string>/opt/my tools/run</string><string>$HOME</string><string>%h</string><string>say &quot;hi&quot;</string><string>it&apos;s</string><string>a&amp;b&lt;c&gt;d</string><string>back\slash</string><string>ünïcödé ✓</string><string></string></array>
+<key>ProgramArguments</key><array><string>/opt/my $tools/run</string><string>$HOME</string><string>%h</string><string>say &quot;hi&quot;</string><string>it&apos;s</string><string>a&amp;b&lt;c&gt;d</string><string>back\slash</string><string>ünïcödé ✓</string><string></string></array>
 <key>EnvironmentVariables</key><dict><key>A</key><string>$x %i &quot;q&quot; &apos;s&apos; \ &amp; &lt;&gt;</string><key>EMPTY</key><string></string><key>UNI</key><string>日本</string></dict>
 <key>StandardOutPath</key><string>/home/u/logs/my job %.log</string>
 <key>StandardErrorPath</key><string>/home/u/logs/my job %.log</string>

@@ -1,0 +1,13 @@
+# managed-by oncue shape/no-delay
+[Unit]
+Description=shape/no-delay
+
+[Service]
+Type=simple
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"
+Restart=always
+RestartSec=0
+
+[Install]
+WantedBy=default.target

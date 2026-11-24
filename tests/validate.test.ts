@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { OnCueError } from "../src/errors.ts";
 import { validateJob } from "../src/validate.ts";
+import { code } from "./fakes.ts";
 
 const base = {
   namespace: "tender",
@@ -12,15 +12,36 @@ const base = {
 const patched = (patch: Record<string, unknown>) => ({ ...base, ...patch });
 const sched = (schedule: unknown) => patched({ schedule });
 
-test("accepts tender's three jobs", () => {
-  expect(validateJob(base, { install: true })).toEqual(base as never);
-  validateJob(sched({ kind: "keepAlive", restart: "on-failure", delaySeconds: 30 }));
-  validateJob(sched({ kind: "calendar", at: [{ weekday: "mon", hour: 9, minute: 0 }] }));
-  validateJob(patched({ cwd: "C:\\Users\\u\\tender", log: "native", env: { PATH: "/usr/bin" }, catchUp: false }));
-});
+const accepts: [string, unknown, { install?: boolean }?][] = [
+  ["tender intake on install", base, { install: true }],
+  ["tender run", sched({ kind: "keepAlive", restart: "on-failure", delaySeconds: 30 })],
+  ["tender prs", sched({ kind: "calendar", at: [{ weekday: "mon", hour: 9, minute: 0 }] })],
+  [
+    "windows cwd, native log, env, catchUp",
+    patched({ cwd: "C:\\Users\\u\\tender", log: "native", env: { PATH: "/usr/bin" }, catchUp: false }),
+  ],
+  ["relative command[0] outside install", patched({ command: ["bun"] })],
+  ["custom POSIX log", patched({ log: "/home/u/logs/intake.log" })],
+  ["custom Windows log", patched({ log: "C:\\Users\\u\\logs\\intake.log" })],
+  ["31-character namespace and name", patched({ namespace: "a".repeat(31), name: "b".repeat(31) })],
+  ["interval 1", sched({ kind: "interval", minutes: 1 })],
+  ["interval 44640", sched({ kind: "interval", minutes: 44640 })],
+  [
+    "calendar bounds",
+    sched({
+      kind: "calendar",
+      at: [
+        { minute: 0, hour: 0, day: 1 },
+        { minute: 59, hour: 23, day: 31 },
+      ],
+    }),
+  ],
+  ["keepAlive delay 0", sched({ kind: "keepAlive", restart: "always", delaySeconds: 0 })],
+  ["keepAlive delay 86400", sched({ kind: "keepAlive", restart: "always", delaySeconds: 86400 })],
+];
 
-test("accepts relative command[0] outside install", () => {
-  validateJob(patched({ command: ["bun"] }));
+test.each(accepts)("accepts %s", (_, input, opts = {}) => {
+  expect(validateJob(input, opts)).toEqual(input as never);
 });
 
 const rejects: [string, unknown, { install?: boolean }?][] = [
@@ -54,7 +75,8 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["schedule missing", patched({ schedule: undefined })],
   ["schedule unknown kind", sched({ kind: "cron", expr: "* * * * *" })],
   ["interval unknown key", sched({ kind: "interval", minutes: 15, every: 5 })],
-  ["calendar unknown key", sched({ kind: "calendar", at: [{ minute: 0, hours: 9 }] })],
+  ["calendar unknown key", sched({ kind: "calendar", at: [{ minute: 0 }], every: 5 })],
+  ["calendar entry unknown key", sched({ kind: "calendar", at: [{ minute: 0, hours: 9 }] })],
   ["keepAlive unknown key", sched({ kind: "keepAlive", restart: "always", delay: 30 })],
   ["schedule kind toString", sched({ kind: "toString" })],
   ["interval zero", sched({ kind: "interval", minutes: 0 })],
@@ -65,7 +87,9 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["calendar not array", sched({ kind: "calendar", at: { minute: 0 } })],
   ["calendar entry not object", sched({ kind: "calendar", at: [0] })],
   ["calendar minute missing", sched({ kind: "calendar", at: [{ hour: 9 }] })],
+  ["calendar minute -1", sched({ kind: "calendar", at: [{ minute: -1 }] })],
   ["calendar minute 60", sched({ kind: "calendar", at: [{ minute: 60 }] })],
+  ["calendar hour -1", sched({ kind: "calendar", at: [{ minute: 0, hour: -1 }] })],
   ["calendar hour 24", sched({ kind: "calendar", at: [{ minute: 0, hour: 24 }] })],
   ["calendar day 0", sched({ kind: "calendar", at: [{ minute: 0, day: 0 }] })],
   ["calendar day 32", sched({ kind: "calendar", at: [{ minute: 0, day: 32 }] })],
@@ -73,16 +97,11 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["calendar weekday + day", sched({ kind: "calendar", at: [{ minute: 0, weekday: "mon", day: 1 }] })],
   ["keepAlive bad restart", sched({ kind: "keepAlive", restart: "never" })],
   ["keepAlive negative delay", sched({ kind: "keepAlive", restart: "always", delaySeconds: -1 })],
+  ["keepAlive delay 86401", sched({ kind: "keepAlive", restart: "always", delaySeconds: 86401 })],
   ["keepAlive catchUp", patched({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: true })],
+  ["keepAlive catchUp false", patched({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: false })],
 ];
 
 test.each(rejects)("rejects %s", (_, input, opts = {}) => {
-  let err: unknown;
-  try {
-    validateJob(input, opts);
-  } catch (e) {
-    err = e;
-  }
-  expect(err).toBeInstanceOf(OnCueError);
-  expect((err as OnCueError).code).toBe("INVALID_SPEC");
+  expect(code(() => validateJob(input, opts))).toBe("INVALID_SPEC");
 });
