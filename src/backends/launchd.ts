@@ -63,6 +63,8 @@ function render(job: Job, env: Env): Rendered {
   // XML comments cannot contain "--", so the marker could not be written.
   if (`${job.namespace}/${job.name}`.includes("--"))
     throw new OnCueError("UNSUPPORTED", 'launchd: namespace and name cannot contain "--"');
+  // ExitTimeOut is only the SIGTERM-to-SIGKILL grace; launchd has no run-time limit.
+  if (job.timeout !== undefined) throw new OnCueError("UNSUPPORTED", "launchd: timeout is not supported");
   const log =
     job.log && job.log !== "native"
       ? posixPath(job.log, "log")

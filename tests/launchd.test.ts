@@ -115,6 +115,7 @@ test("render rejects what a plist cannot hold", () => {
   expect(code(() => launchd.render({ ...intake, command: ["/bin/x", "a\u0001b"] }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => launchd.render({ ...intake, env: { A: "\uffff" } }, fakeEnv))).toBe("INVALID_SPEC");
   expect(code(() => launchd.render({ ...intake, name: "a--b" }, fakeEnv))).toBe("UNSUPPORTED");
+  expect(code(() => launchd.render({ ...intake, timeout: 5 }, fakeEnv))).toBe("UNSUPPORTED");
   expect(launchd.render({ ...CASES[1]!, catchUp: false }, fakeEnv).warnings).toHaveLength(1);
 });
 

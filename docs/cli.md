@@ -91,7 +91,7 @@ not installed
 With a name, reports that job; without, every job `list` finds in the namespace. Text output, one line per job:
 
 ```
-<name>: active|inactive|not installed[, last exit <n>][, next <ISO 8601 UTC>]
+<name>: active|inactive|not installed[, last exit <n>][, timed out][, next <ISO 8601 UTC>]
 ```
 
 followed by any warnings on stderr (on Linux: `linger is off: jobs stop at logout (loginctl enable-linger)`). What `active` means per scheduler is in [backends](backends.md#status).
@@ -113,7 +113,7 @@ Prints the status object (with `name`) for one job, or an array of them for a na
 }
 ```
 
-`lastExit`, `lastRun` and `nextRun` are omitted when the scheduler does not report them.
+`lastExit`, `lastRun` and `nextRun` are omitted when the scheduler does not report them. `timedOut: true` appears only when systemd reports the service's `Result=timeout`: usually a run stopped by its `timeout`, also a stop that timed out (systemd only).
 
 ## `list <namespace>`
 

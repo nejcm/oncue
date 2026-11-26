@@ -57,6 +57,7 @@ function render(job: Job, env: Env): Rendered {
     ...(log ? [`StandardOutput=${log}`, `StandardError=${log}`] : []),
     ...(s.kind === "keepAlive" ? [`Restart=${s.restart}`] : []),
     ...(s.kind === "keepAlive" && s.delaySeconds !== undefined ? [`RestartSec=${s.delaySeconds}`] : []),
+    ...(job.timeout ? [`TimeoutStartSec=${job.timeout}min`] : []),
     ...(job.leaveChildrenOnStop ? ["KillMode=process"] : []),
     ...(s.kind === "keepAlive" ? ["", "[Install]", "WantedBy=default.target"] : []),
   ];
@@ -219,6 +220,7 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
     lastExit: svc.ExecMainExitTimestamp && svc.ExecMainStatus ? Number(svc.ExecMainStatus) : undefined,
     lastRun: unixDate(tmr ? tmr.LastTriggerUSec : svc.ExecMainStartTimestamp),
     nextRun: unixDate(tmr?.NextElapseUSecRealtime),
+    ...(svc.Result === "timeout" && { timedOut: true }),
     warnings,
     native,
   };

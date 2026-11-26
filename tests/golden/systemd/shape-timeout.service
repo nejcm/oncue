@@ -1,0 +1,9 @@
+# managed-by oncue shape/timeout
+[Unit]
+Description=shape/timeout
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"
+TimeoutStartSec=20min

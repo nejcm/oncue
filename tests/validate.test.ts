@@ -38,6 +38,8 @@ const accepts: [string, unknown, { install?: boolean }?][] = [
   ],
   ["keepAlive delay 0", sched({ kind: "keepAlive", restart: "always", delaySeconds: 0 })],
   ["keepAlive delay 86400", sched({ kind: "keepAlive", restart: "always", delaySeconds: 86400 })],
+  ["interval timeout 1", patched({ timeout: 1 })],
+  ["calendar timeout 10080", patched({ schedule: { kind: "calendar", at: [{ minute: 0 }] }, timeout: 10080 })],
 ];
 
 test.each(accepts)("accepts %s", (_, input, opts = {}) => {
@@ -100,6 +102,11 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["keepAlive delay 86401", sched({ kind: "keepAlive", restart: "always", delaySeconds: 86401 })],
   ["keepAlive catchUp", patched({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: true })],
   ["keepAlive catchUp false", patched({ schedule: { kind: "keepAlive", restart: "always" }, catchUp: false })],
+  ["timeout 0", patched({ timeout: 0 })],
+  ["timeout 10081", patched({ timeout: 10081 })],
+  ["timeout fractional", patched({ timeout: 1.5 })],
+  ["timeout string", patched({ timeout: "5" })],
+  ["keepAlive timeout", patched({ schedule: { kind: "keepAlive", restart: "always" }, timeout: 5 })],
 ];
 
 test.each(rejects)("rejects %s", (_, input, opts = {}) => {

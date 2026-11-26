@@ -98,6 +98,7 @@ interface Status {
   lastExit?: number;
   lastRun?: Date;
   nextRun?: Date;
+  timedOut?: true; // systemd only: the service's Result=timeout, usually a run stopped by `timeout`
   warnings: string[];
   native: string; // raw scheduler output
 }

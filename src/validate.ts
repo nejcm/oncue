@@ -15,6 +15,7 @@ const JOB_KEYS = [
   "log",
   "schedule",
   "catchUp",
+  "timeout",
   "leaveChildrenOnStop",
 ];
 
@@ -67,6 +68,7 @@ export function validateJob(input: unknown, opts: { install?: boolean } = {}): J
   for (const k of ["catchUp", "leaveChildrenOnStop"]) {
     if (j[k] !== undefined && typeof j[k] !== "boolean") fail(`${k} must be a boolean`);
   }
+  if (j.timeout !== undefined && !isInt(j.timeout, 1, 10080)) fail("timeout must be an integer 1..10080");
 
   const s = j.schedule;
   if (!isObj(s)) return fail("schedule must be an object");
@@ -93,6 +95,7 @@ export function validateJob(input: unknown, opts: { install?: boolean } = {}): J
     if (s.restart !== "always" && s.restart !== "on-failure") fail('schedule.restart must be "always" or "on-failure"');
     optInt(s, "delaySeconds", 0, 86400, "schedule");
     if (j.catchUp !== undefined) fail("catchUp applies to timers only");
+    if (j.timeout !== undefined) fail("timeout applies to timers only");
   } else {
     fail('schedule.kind must be "interval", "calendar" or "keepAlive"');
   }

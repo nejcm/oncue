@@ -15,6 +15,7 @@ export interface Job {
   log?: string | "native";
   schedule: Schedule;
   catchUp?: boolean;
+  timeout?: number;
   leaveChildrenOnStop?: boolean;
 }
 export type JobRef = Pick<Job, "namespace" | "name">;
@@ -45,6 +46,7 @@ export interface Status {
   lastExit?: number;
   lastRun?: Date;
   nextRun?: Date;
+  timedOut?: true;
   warnings: string[];
   native: string;
 }

@@ -189,6 +189,19 @@ test("status parses show output and warns when linger is off", () => {
   expect(systemd.status(run, fakeEnv, unmarked.sys)).toMatchObject({ installed: false, active: false });
 });
 
+test("status reports a run killed by TimeoutStartSec", () => {
+  const props =
+    "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,NextElapseUSecRealtime,LastTriggerUSec";
+  const out = [
+    "LoadState=loaded\nActiveState=failed\nSubState=failed\nResult=timeout\nExecMainStatus=15\nExecMainStartTimestamp=@1700000000\nExecMainExitTimestamp=@1700000060\n",
+    "LoadState=loaded\nActiveState=active\nSubState=waiting\nResult=success\n",
+  ].join("\n");
+  const f = fakeSys(files(), {
+    [`${sc} show tender-intake.service tender-intake.timer -p ${props} --timestamp=unix`]: { out },
+  });
+  expect(systemd.status(intake, fakeEnv, f.sys)).toMatchObject({ lastExit: 15, timedOut: true });
+});
+
 test("status of a running keepAlive service: no exit yet, last run is its start", () => {
   const props = "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp";
   const out =

@@ -57,6 +57,8 @@ export const CASES: Job[] = [
   shape("always", { kind: "keepAlive", restart: "always" }),
   shape("no-delay", { kind: "keepAlive", restart: "always", delaySeconds: 0 }),
   shape("slow-restart", { kind: "keepAlive", restart: "on-failure", delaySeconds: 90 }),
+  shape("timeout", { kind: "interval", minutes: 30 }, { timeout: 20 }),
+  shape("calendar-timeout", { kind: "calendar", at: [{ hour: 3, minute: 0 }] }, { timeout: 10080 }),
 ];
 
 const HOSTILE_WIN: Job = {
@@ -93,6 +95,10 @@ export const windows = (j: Job): Job => ({
   ...(j.env?.PATH && { env: { ...j.env, PATH: j.env.PATH.split(":").map(winPath).join(";") } }),
 });
 
-/** Task Scheduler cannot pass `"` or empty arguments, so it gets a Windows-shaped hostile case instead. */
+/** Task Scheduler cannot pass `"` or empty arguments, so it gets a Windows-shaped hostile case instead; launchd rejects `timeout`. */
 export const casesFor = (backend: string): Job[] =>
-  backend === "schtasks" ? [...CASES.filter((j) => j.namespace !== "hostile").map(windows), HOSTILE_WIN] : CASES;
+  backend === "schtasks"
+    ? [...CASES.filter((j) => j.namespace !== "hostile").map(windows), HOSTILE_WIN]
+    : backend === "launchd"
+      ? CASES.filter((j) => j.timeout === undefined)
+      : CASES;

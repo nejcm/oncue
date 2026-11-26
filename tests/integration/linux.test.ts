@@ -41,8 +41,8 @@ const unitProcs = (unit: string) => {
     throw e;
   }
 };
-const until = async (ok: () => boolean) => {
-  for (const end = Date.now() + 10_000; !ok() && Date.now() < end;) await Bun.sleep(100);
+const until = async (ok: () => boolean, ms = 10_000) => {
+  for (const end = Date.now() + ms; !ok() && Date.now() < end;) await Bun.sleep(100);
   return ok();
 };
 
@@ -109,10 +109,11 @@ describe.skipIf(!enabled)("systemd on this host", () => {
   });
   const timer = job("tick", { kind: "interval", minutes: 15 }, ["true"]);
   const daemon = job("daemon", { kind: "keepAlive", restart: "on-failure", delaySeconds: 5 }, ["sleep", "600"]);
+  const slow = { ...job("slow", { kind: "interval", minutes: 60 }, ["sleep", "600"]), timeout: 1 };
 
   afterAll(() => {
     if (!live) return;
-    for (const j of [timer, daemon]) {
+    for (const j of [timer, daemon, slow]) {
       try {
         uninstall(j);
       } catch (e) {
@@ -148,6 +149,18 @@ describe.skipIf(!enabled)("systemd on this host", () => {
     expect(existsSync(stampPath())).toBe(false);
     expect(status(daemon)).toMatchObject({ installed: false, active: false });
   });
+
+  test.skipIf(!live)(
+    "timeout kills a run that exceeds it and status reports it",
+    async () => {
+      install(slow);
+      realSys.exec(["systemctl", "--user", "start", "--no-block", `${ns}-slow.service`], { mutates: true });
+      const unit = `${ns}-slow.service`;
+      expect(await until(() => status(slow).timedOut === true && unitProcs(unit) === "", 90_000)).toBe(true);
+      expect(uninstall(slow)).toEqual({ removed: true });
+    },
+    100_000,
+  );
 
   let pids = "";
   const installed: string[] = [];

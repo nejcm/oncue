@@ -140,7 +140,9 @@ function render(job: Job, env: Env): Rendered {
     el("StartWhenAvailable", String(job.catchUp !== false)),
     ...(keepAlive
       ? [el("ExecutionTimeLimit", "PT0S"), el("RestartOnFailure", el("Interval", "PT1M") + el("Count", "3"))]
-      : []),
+      : job.timeout
+        ? [el("ExecutionTimeLimit", `PT${job.timeout}M`)]
+        : []),
     el("Enabled", "true"),
   ];
   const task = [

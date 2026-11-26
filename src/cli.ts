@@ -125,7 +125,7 @@ export function main(argv: string[], io: Io = {}): number {
         else
           for (const s of all) {
             out(
-              `${s.name}: ${s.installed ? (s.active ? "active" : "inactive") : "not installed"}${s.lastExit === undefined ? "" : `, last exit ${s.lastExit}`}${s.nextRun ? `, next ${s.nextRun.toISOString()}` : ""}`,
+              `${s.name}: ${s.installed ? (s.active ? "active" : "inactive") : "not installed"}${s.lastExit === undefined ? "" : `, last exit ${s.lastExit}`}${s.timedOut ? ", timed out" : ""}${s.nextRun ? `, next ${s.nextRun.toISOString()}` : ""}`,
             );
             warn(s.warnings);
           }

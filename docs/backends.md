@@ -44,6 +44,7 @@ On Windows the task runs `powershell.exe -NoProfile -NonInteractive -ExecutionPo
 | timer job | `Type=oneshot` service + timer `WantedBy=timers.target` | | |
 | `delaySeconds` | `RestartSec=` | `ThrottleInterval` | repetition interval of the `TimeTrigger` |
 | `catchUp` (default on) | `Persistent=true` on `OnCalendar` timers | no key (see [catch-up](#catch-up)) | `StartWhenAvailable` |
+| `timeout` | `TimeoutStartSec=<N>min` in the service | rejected, `UNSUPPORTED` (see [timeout](#timeout)) | `ExecutionTimeLimit PT<N>M`, scheduled starts only (omitted: the 72-hour default) |
 | `leaveChildrenOnStop` | `KillMode=process` (see [children](#children-on-stop)) | `AbandonProcessGroup` | ignored, with a warning |
 | overlap | no setting | no setting | `MultipleInstancesPolicy IgnoreNew` |
 
@@ -63,6 +64,12 @@ Aligned intervals (those dividing an hour, or a day in whole hours) fire on the 
 - launchd: `StartInterval` counts from when the job is loaded **[unverified]**.
 - Task Scheduler: the trigger starts 2000-01-01 00:00 local time and repeats every N minutes, so the phase should be fixed **[unverified]**.
 
+### Timeout
+
+- systemd: a `oneshot` service that is still starting after `TimeoutStartSec=` is stopped (SIGTERM, then SIGKILL after `TimeoutStopSec=`) and its `Result` becomes `timeout`, which `status` reports as `timedOut: true`. systemd also sets `Result=timeout` when stopping a service times out, so `timedOut` can appear without `timeout` set.
+- launchd: no plist key limits run time. `ExitTimeOut` is only how long launchd waits between SIGTERM and SIGKILL when it stops a job, and `TimeOut` is no longer implemented ([launchd.plist(5), macOS 26.7](https://man.freebsd.org/cgi/man.cgi?apropos=0&manpath=macOS+26.7&query=launchd.plist&sektion=5)). `timeout` is therefore `UNSUPPORTED`.
+- Task Scheduler: `ExecutionTimeLimit` stops a scheduled run after the limit. A task started on demand (`schtasks /run`, Run in the UI) bypasses it ([put_ExecutionTimeLimit](https://learn.microsoft.com/en-us/windows/win32/api/taskschd/nf-taskschd-itasksettings-put_executiontimelimit)). `status` does not report a time-out.
+
 ### Catch-up
 
 - systemd: `Persistent=true` is written for calendar jobs and aligned intervals unless `catchUp: false`. Unaligned intervals use monotonic timers, which have no catch-up; `catchUp` has no effect on them. An explicit `catchUp: true` warns; the default does not.
@@ -74,7 +81,7 @@ Aligned intervals (those dividing an hour, or a day in whole hours) fire on the 
 - systemd: `Restart=` and `RestartSec=` as given.
 - launchd: `ThrottleInterval` is a minimum spacing between launches rather than a delay after exit **[unverified]**.
 - Task Scheduler cannot restart on exit code. The repeating `TimeTrigger` with `IgnoreNew` relaunches the task within one repetition interval after any exit (at least 1 minute: the schema's [minimum](https://learn.microsoft.com/en-us/windows/win32/taskschd/taskschedulerschema-interval-repetitiontype-element) is `PT1M`), so `restart: "on-failure"` behaves as `"always"` (a warning says so). Whether `RestartOnFailure` reacts to non-zero exit codes or only to launch failures is **[unverified]**.
-- Task Scheduler stops tasks after its default execution time limit of 72 hours ([TaskSettings](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings)). `keepAlive` jobs set `ExecutionTimeLimit PT0S` (no limit); `interval` and `calendar` jobs keep the default.
+- Task Scheduler stops tasks after its default execution time limit of 72 hours ([TaskSettings](https://learn.microsoft.com/en-us/windows/win32/taskschd/tasksettings)). `keepAlive` jobs set `ExecutionTimeLimit PT0S` (no limit); `interval` and `calendar` jobs keep the default unless `timeout` sets `PT<N>M`.
 
 ### Sessions and logout
 
@@ -121,6 +128,7 @@ A definition at the job's path without a marker is overwritten by `install` but 
 | `lastExit` | `ExecMainStatus` once the service has exited | `last exit code` from `launchctl print` | `LastTaskResult` once the task has run |
 | `lastRun` | timer `LastTriggerUSec`, or service start time for `keepAlive` | not reported | `LastRunTime` |
 | `nextRun` | timer `NextElapseUSecRealtime` | not reported | `NextRunTime` |
+| `timedOut` | `true` when the service's `Result=timeout`, otherwise omitted | not reported | not reported |
 | `native` | `systemctl --user show` output | `launchctl print` output | `Get-ScheduledTask` JSON |
 
 systemd dates need `systemctl show --timestamp=unix` (systemd 251 or newer); on older versions `status` falls back to a plain `show`, and `lastRun` and `nextRun` are absent. `launchctl print` output is not a stable interface (per `launchctl(1)`), so launchd fields are best-effort.

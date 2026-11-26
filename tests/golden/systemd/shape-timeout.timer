@@ -1,0 +1,10 @@
+# managed-by oncue shape/timeout
+[Unit]
+Description=shape/timeout
+
+[Timer]
+OnCalendar=*:0/30
+Persistent=true
+
+[Install]
+WantedBy=timers.target

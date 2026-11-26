@@ -30,6 +30,7 @@ A job is a JSON object (or a `Job` value in TypeScript). Unknown fields are reje
 | `log` | string | no | `"native"` or an absolute path; stdout and stderr both go there. Omitted means `"native"` |
 | `schedule` | object | yes | See [schedules](#schedules) |
 | `catchUp` | boolean | no | Run a slot missed while the machine was off or asleep. Default on. Timers only: set on a `keepAlive` job it is rejected |
+| `timeout` | integer | no | Minutes, 1..10080 (7 days): stop a run still going after this long. Task Scheduler applies it only to scheduled starts, not on-demand ones (see [timeout](backends.md#timeout)). Timers only: set on a `keepAlive` job it is rejected. launchd has no run-time limit, so it rejects `timeout` as `UNSUPPORTED` |
 | `leaveChildrenOnStop` | boolean | no | When the job is stopped, kill only the main process and leave its children running. Default off. Ignored with a warning by Task Scheduler |
 
 The job is identified by `namespace` + `name`. `uninstall`, `status` and `list` take only these.

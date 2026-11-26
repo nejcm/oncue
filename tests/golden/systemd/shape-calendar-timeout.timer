@@ -1,0 +1,10 @@
+# managed-by oncue shape/calendar-timeout
+[Unit]
+Description=shape/calendar-timeout
+
+[Timer]
+OnCalendar=*-*-* 03:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
