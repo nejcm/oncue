@@ -185,6 +185,14 @@ describe("exit codes", () => {
     expect(run(["install", "-"], undefined, JSON.stringify({ ...spec, command: ["oncue-no-such-cmd"] })).code).toBe(3);
   });
 
+  test("NOT_FOUND names a non-executable absolute command as such", () => {
+    const script = join(mkdtempSync(join(tmpdir(), "oncue-")), "job.sh");
+    writeFileSync(script, "#!/bin/sh\n", { mode: 0o644 });
+    const r = run(["install", "-"], undefined, JSON.stringify({ ...spec, command: [script] }));
+    expect(r.code).toBe(3);
+    expect(r.err).toContain(`${script} is not an executable file`);
+  });
+
   test("COMMAND_FAILED", () => {
     const r = run(
       ["status", "tender", "intake", "--backend", "systemd"],

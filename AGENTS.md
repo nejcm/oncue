@@ -11,7 +11,7 @@ oncue renders an OS-neutral job spec into native scheduler definitions (systemd 
 
 ## Constraints
 
-- Zero runtime dependencies. Core code uses only `node:` modules, no `Bun.*`, so a later Node build stays possible.
+- Zero runtime dependencies. Core code uses only `node:` modules, no `Bun.*`, so the Node bundle (`bun run build:node`) runs on Node 18.3 or later.
 - Render functions are pure (spec in, file text out); every side effect goes through the injected `Sys`.
 - Never build shell strings. Quote per backend through `src/quote.ts`.
 - `list`, `status`, `run` and `uninstall` act only on definitions carrying the `managed-by oncue <ns>/<name>` marker.

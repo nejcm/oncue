@@ -1,5 +1,5 @@
 import { homedir } from "node:os";
-import { posix, win32 } from "node:path";
+import { isAbsolute, posix, win32 } from "node:path";
 import { OnCueError } from "./errors.ts";
 import { which } from "./path.ts";
 import { BACKENDS } from "./backends/index.ts";
@@ -41,8 +41,13 @@ const ref = (r: JobRef): JobRef => ({
 /** Validates `spec`, resolves command[0] on PATH, and installs or updates the job. */
 export function install(spec: unknown, o: Options = {}): { changed: boolean; warnings: string[] } {
   const job = validateJob(spec);
-  const exe = which(job.command[0]);
-  if (!exe) throw new OnCueError("NOT_FOUND", `${job.command[0]} not found on PATH`);
+  const cmd = job.command[0];
+  const exe = which(cmd);
+  if (!exe)
+    throw new OnCueError(
+      "NOT_FOUND",
+      isAbsolute(cmd) ? `${cmd} is not an executable file` : `${cmd} not found on PATH`,
+    );
   const { env, sys, backend } = setup(o);
   return backend.install(validateJob({ ...job, command: [exe, ...job.command.slice(1)] }, { install: true }), env, sys);
 }
