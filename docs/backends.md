@@ -42,6 +42,7 @@ On Windows the task runs `powershell.exe -NoProfile -NonInteractive -ExecutionPo
 | `calendar` entry | one `OnCalendar=` per entry, e.g. `Mon *-*-* 09:00`, `*-*-01 06:00`, `*-*-* *:05` | one `StartCalendarInterval` dict per entry; omitted keys are wildcards | one `CalendarTrigger` per entry: `ScheduleByWeek`, `ScheduleByMonth` (all months) or `ScheduleByDay`; no `hour` adds `Repetition PT1H` for `P1D` |
 | `keepAlive` | `Type=simple`, `Restart=always\|on-failure`, `WantedBy=default.target` | `KeepAlive` `true`, or `{SuccessfulExit: false}` for `on-failure` | `LogonTrigger` for the user + `TimeTrigger` repeating every max(1, ⌈delay/60⌉) min, `ExecutionTimeLimit PT0S`, `RestartOnFailure` 1 min × 3 |
 | timer job | `Type=oneshot` service + timer `WantedBy=timers.target` | | |
+| `manual` | `Type=oneshot` service only, no `[Install]`, never enabled | no schedule keys | no `Triggers` element |
 | `delaySeconds` | `RestartSec=` | `ThrottleInterval` | repetition interval of the `TimeTrigger` |
 | `catchUp` (default on) | `Persistent=true` on `OnCalendar` timers | no key (see [catch-up](#catch-up)) | `StartWhenAvailable` |
 | `timeout` | `TimeoutStartSec=<N>min` in the service | rejected, `UNSUPPORTED` (see [timeout](#timeout)) | `ExecutionTimeLimit PT<N>M`, scheduled starts only (omitted: the 72-hour default) |
@@ -105,15 +106,15 @@ A timer run that comes due while the previous one is still running: Task Schedul
 
 `install` renders, compares each file with what is on disk, and checks scheduler state. Nothing is written or run when the files match and the job is already enabled/loaded and active.
 
-- systemd: write changed files, `daemon-reload` if any changed, `enable --now` the timer (or the `keepAlive` service) if not enabled and active, `restart` it if files changed and it was active. Changing the schedule kind disables the unit that was enabled for the old kind; a timer left over from a timer job is removed.
-- launchd: write the plist if changed, `bootout gui/<uid>/<label>` if loaded, `bootstrap gui/<uid> <plist>`. After a `bootout`, a `bootstrap` exiting 5 (the old instance still tearing down **[unverified]**) is retried up to 4 times, 0.5 s apart. Up to date means the plist matches and `launchctl print` succeeds.
+- systemd: write changed files, `daemon-reload` if any changed, `enable --now` the timer (or the `keepAlive` service) if not enabled and active, `restart` it if files changed and it was active. A `manual` job is never enabled or started; up to date means the files match and the service is not enabled. Changing the schedule kind disables (and stops) the unit that was enabled or active for the old kind; a timer left over from a timer job is removed.
+- launchd: write the plist if changed, `bootout gui/<uid>/<label>` if loaded, `bootstrap gui/<uid> <plist>`. A `manual` plist has no schedule keys and no `RunAtLoad`, so loading it starts nothing. After a `bootout`, a `bootstrap` exiting 5 (the old instance still tearing down **[unverified]**) is retried up to 4 times, 0.5 s apart. Up to date means the plist matches and `launchctl print` succeeds.
 - Task Scheduler: write changed files, `schtasks /create /tn \<ns>\<name> /xml <file> /f`; for `keepAlive` (or a former `keepAlive`) `/end` the running instance, and for `keepAlive` `/run` it. Up to date means files match, the task is marked as this job and not `Disabled`, and a `keepAlive` task is `Running`.
 
 Every backend creates a missing directory for a custom `log` path before activating the job.
 
 `uninstall` stops the job, removes its definition files and registration, and keeps logs. A failed stop or disable is tolerated, but a missing scheduler tool (`NOT_FOUND`) or host value (`NO_BACKEND`) aborts before anything is removed:
 
-- systemd: `disable --now` the timer, `stop` the service and `clean --what=state` the timer (removes its `Persistent=` stamp, systemd 243+; per `systemd.timer(5)`), or `disable --now` the `keepAlive` service; then remove the units, `daemon-reload`, `reset-failed`.
+- systemd: `disable --now` the timer, `stop` the service and `clean --what=state` the timer (removes its `Persistent=` stamp, systemd 243+; per `systemd.timer(5)`), or `disable --now` the `keepAlive` or `manual` service; then remove the units, `daemon-reload`, `reset-failed`.
 - launchd: `bootout`, remove the plist.
 - Task Scheduler: `/end`, `/delete /f`, remove the `.ps1` and `.xml`.
 
@@ -134,9 +135,9 @@ A definition at the job's path without a marker is overwritten by `install` but 
 | Field | systemd | launchd | Task Scheduler |
 |---|---|---|---|
 | `installed` | a marked unit file exists | the marked plist exists | the task exists and its `Source` marks this job |
-| `active` | timer (or `keepAlive` service) `ActiveState=active` | loaded; for `keepAlive`, `state = running` | `Ready` or `Running`; for `keepAlive`, `Running` |
+| `active` | timer (or `keepAlive` service) `ActiveState=active`; for `manual`, the service running (`SubState=start`) | loaded; for `keepAlive` and `manual`, `state = running` | `Ready` or `Running`; for `keepAlive` and `manual`, `Running` |
 | `lastExit` | `ExecMainStatus` once the service has exited | `last exit code` from `launchctl print` | `LastTaskResult` once the task has run |
-| `lastRun` | timer `LastTriggerUSec`, or service start time for `keepAlive` | not reported | `LastRunTime` |
+| `lastRun` | timer `LastTriggerUSec`, or service start time for `keepAlive` and `manual` | not reported | `LastRunTime` |
 | `nextRun` | timer `NextElapseUSecRealtime` | not reported | `NextRunTime` |
 | `timedOut` | `true` when the service's `Result=timeout`, otherwise omitted | not reported | not reported |
 | `native` | `systemctl --user show` output | `launchctl print` output | `Get-ScheduledTask` JSON |

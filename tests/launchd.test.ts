@@ -98,6 +98,9 @@ test("status reads launchctl print best-effort", () => {
     active: false,
   });
   expect(launchd.status(intake, fakeEnv, fakeSys(files()).sys)).toMatchObject({ installed: true, active: true });
+  const manual = { ...intake, schedule: { kind: "manual" } } as const;
+  const idle = fakeSys(files(manual), { "launchctl print gui/501/tender.intake": { out: "\tstate = not running\n" } });
+  expect(launchd.status(manual, fakeEnv, idle.sys).active).toBe(false);
   expect(launchd.status(intake, fakeEnv, fakeSys().sys)).toMatchObject({ installed: false, active: false });
   const foreign = fakeSys({ [plist]: "<!-- managed-by oncue tender/other -->\n" });
   expect(launchd.status(intake, fakeEnv, foreign.sys)).toMatchObject({ installed: false, active: false });

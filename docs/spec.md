@@ -29,8 +29,8 @@ A job is a JSON object (or a `Job` value in TypeScript). Unknown fields are reje
 | `env` | object | no | Keys match `^[A-Za-z_][A-Za-z0-9_]*$`; values are strings (may be empty) |
 | `log` | string | no | `"native"` or an absolute path; stdout and stderr both go there. Omitted means `"native"` |
 | `schedule` | object | yes | See [schedules](#schedules) |
-| `catchUp` | boolean | no | Run a slot missed while the machine was off or asleep. Default on. Timers only: set on a `keepAlive` job it is rejected |
-| `timeout` | integer | no | Minutes, 1..10080 (7 days): stop a run still going after this long. Task Scheduler applies it only to scheduled starts, not on-demand ones (see [timeout](backends.md#timeout)). Timers only: set on a `keepAlive` job it is rejected. launchd has no run-time limit, so it rejects `timeout` as `UNSUPPORTED` |
+| `catchUp` | boolean | no | Run a slot missed while the machine was off or asleep. Default on. Timers only: set on a `keepAlive` or `manual` job it is rejected |
+| `timeout` | integer | no | Minutes, 1..10080 (7 days): stop a run still going after this long. Task Scheduler applies it only to scheduled starts, not on-demand ones, so never to a `manual` job (see [timeout](backends.md#timeout)). Set on a `keepAlive` job it is rejected. launchd has no run-time limit, so it rejects `timeout` as `UNSUPPORTED` |
 | `leaveChildrenOnStop` | boolean | no | When the job is stopped, kill only the main process and leave its children running. Default off. Ignored with a warning by Task Scheduler |
 
 The job is identified by `namespace` + `name`. `uninstall`, `status`, `run` and `list` take only these.
@@ -97,6 +97,14 @@ A long-running process, started at install (and at login) and restarted when it 
 |---|---|
 | `restart` | `"always"`: restart after any exit. `"on-failure"`: only after a non-zero exit (Task Scheduler treats it as `always`, with a warning) |
 | `delaySeconds` | integer 0..86400, optional: wait before restarting. Task Scheduler rounds it up to whole minutes, minimum 1 |
+
+### `manual`
+
+```json
+{ "kind": "manual" }
+```
+
+No schedule: the job runs only when `run` starts it. `install` registers it without enabling or starting anything, so it can be tried with `run --wait` before installing the same `namespace`/`name` again with a real schedule. Installing `manual` over a scheduled job disables that schedule.
 
 ## Character rules
 

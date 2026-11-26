@@ -39,6 +39,8 @@ const accepts: [string, unknown, { install?: boolean }?][] = [
   ["keepAlive delay 0", sched({ kind: "keepAlive", restart: "always", delaySeconds: 0 })],
   ["keepAlive delay 86400", sched({ kind: "keepAlive", restart: "always", delaySeconds: 86400 })],
   ["interval timeout 1", patched({ timeout: 1 })],
+  ["manual", sched({ kind: "manual" })],
+  ["manual timeout", patched({ schedule: { kind: "manual" }, timeout: 30 })],
   ["calendar timeout 10080", patched({ schedule: { kind: "calendar", at: [{ minute: 0 }] }, timeout: 10080 })],
 ];
 
@@ -106,6 +108,8 @@ const rejects: [string, unknown, { install?: boolean }?][] = [
   ["timeout 10081", patched({ timeout: 10081 })],
   ["timeout fractional", patched({ timeout: 1.5 })],
   ["timeout string", patched({ timeout: "5" })],
+  ["manual extra key", sched({ kind: "manual", minutes: 5 })],
+  ["manual catchUp", patched({ schedule: { kind: "manual" }, catchUp: true })],
   ["keepAlive timeout", patched({ schedule: { kind: "keepAlive", restart: "always" }, timeout: 5 })],
 ];
 

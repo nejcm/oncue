@@ -63,7 +63,7 @@ function render(job: Job, env: Env): Rendered {
   ];
   const files = [{ path: `${u}.service`, content: `${service.join("\n")}\n` }];
   const timerKeys = timerLines(job);
-  if (s.kind !== "keepAlive") {
+  if (s.kind === "interval" || s.kind === "calendar") {
     const timer = [marker(job), "[Unit]", desc, "", "[Timer]", ...timerKeys, "", "[Install]", "WantedBy=timers.target"];
     files.push({ path: `${u}.timer`, content: `${timer.join("\n")}\n` });
   }
@@ -117,7 +117,9 @@ const unixDate = (v: string | undefined) => (v && /^@\d+$/.test(v) ? new Date(Nu
 function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: string[] } {
   const r = render(job, env);
   const u = posix.join(dir(env), unit(job));
-  const timer = job.schedule.kind !== "keepAlive";
+  const kind = job.schedule.kind;
+  const timer = kind === "interval" || kind === "calendar";
+  const manual = kind === "manual";
   const [main, other] = timer
     ? [`${unit(job)}.timer`, `${unit(job)}.service`]
     : [`${unit(job)}.service`, `${unit(job)}.timer`];
@@ -136,15 +138,18 @@ function install(job: Job, env: Env, sys: Sys): { changed: boolean; warnings: st
   const enabled = m?.UnitFileState === "enabled";
   const active = m?.ActiveState === "active";
   // A schedule-kind change leaves the other unit enabled: our stale timer, or a keepAlive service in default.target.
-  const disableOther = o?.UnitFileState === "enabled" && (timer || staleTimer);
+  const disableOther = (o?.UnitFileState === "enabled" || o?.ActiveState === "active") && (timer || staleTimer);
   const filesChanged = pending.length > 0 || staleTimer || disableOther;
-  if (!filesChanged && enabled && active) return { changed: false, warnings: r.warnings };
+  if (!filesChanged && (manual ? !enabled && !active : enabled && active))
+    return { changed: false, warnings: r.warnings };
 
   ensureLogDir(sys, job.log);
   if (disableOther) mayFail(sys, "disable", "--now", other);
+  if (manual && (enabled || active)) mayFail(sys, "disable", "--now", main);
   if (staleTimer) sys.remove(`${u}.timer`);
   for (const f of pending) sys.write(f.path, f.content);
   if (filesChanged) systemctl(sys, true, "daemon-reload");
+  if (manual) return { changed: true, warnings: r.warnings };
   if (!enabled || !active) systemctl(sys, true, "enable", "--now", main);
   if (filesChanged && active) systemctl(sys, true, "restart", main);
   return { changed: true, warnings: r.warnings };
@@ -216,7 +221,8 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   const tmr = timer ? (blocks[1] ?? {}) : undefined;
   return {
     installed: true,
-    active: (tmr ?? svc).ActiveState === "active",
+    // A running oneshot (a manual job) stays in activating/start until it exits.
+    active: (tmr ?? svc).ActiveState === "active" || (!tmr && svc.SubState === "start"),
     lastExit: svc.ExecMainExitTimestamp && svc.ExecMainStatus ? Number(svc.ExecMainStatus) : undefined,
     lastRun: unixDate(tmr ? tmr.LastTriggerUSec : svc.ExecMainStartTimestamp),
     nextRun: unixDate(tmr?.NextElapseUSecRealtime),
@@ -238,7 +244,7 @@ function run(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult {
     systemctl(sys, true, "start", "--no-block", service);
     return {};
   }
-  if (!files.some((f) => f.path.endsWith(".timer")))
+  if (sys.read(posix.join(dir(env), service))?.includes("\nType=simple\n"))
     throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
   const props = ["ActiveState", "Result", "ExecMainStatus", "ExecMainStartTimestampMonotonic"];
   const before = show(sys, [service], props).blocks[0] ?? {};

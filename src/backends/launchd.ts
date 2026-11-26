@@ -49,6 +49,7 @@ function scheduleKeys(job: Job): string {
     const keep = s.restart === "always" ? "<true/>" : `<dict>${key("SuccessfulExit", "<false/>")}</dict>`;
     return key("KeepAlive", keep) + (s.delaySeconds === undefined ? "" : key("ThrottleInterval", int(s.delaySeconds)));
   }
+  if (s.kind === "manual") return "";
   let at: CalendarAt[];
   if (s.kind === "calendar") at = s.at;
   else if (60 % s.minutes === 0) at = slots(60 / s.minutes, s.minutes).map((minute) => ({ minute }));
@@ -85,7 +86,7 @@ function render(job: Job, env: Env): Rendered {
       : []),
     key("StandardOutPath", str(log)),
     key("StandardErrorPath", str(log)),
-    schedule,
+    ...(schedule ? [schedule] : []),
     ...(job.leaveChildrenOnStop ? [key("AbandonProcessGroup", "<true/>")] : []),
     "</dict></plist>",
   ];
@@ -175,10 +176,10 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   if (native === undefined) return { installed: true, active: false, warnings: [], native: "" };
   // launchctl print output is not an API (launchctl(1)); these fields are best-effort.
   const exit = native.match(/^\s*last exit code = (\d+)/m);
-  const keepAlive = text!.includes("<key>KeepAlive</key>");
+  const timer = /^<key>(StartInterval|StartCalendarInterval)<\/key>/m.test(text!);
   return {
     installed: true,
-    active: keepAlive ? running(native) : true,
+    active: timer ? true : running(native),
     lastExit: exit ? Number(exit[1]) : undefined,
     warnings: [],
     native,
@@ -198,7 +199,7 @@ function run(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult {
     launchctl(sys, true, "kickstart", target);
     return {};
   }
-  if (text.includes("<key>KeepAlive</key>"))
+  if (/^<key>KeepAlive<\/key>/m.test(text))
     throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
   const fail = (why: string) => new OnCueError("COMMAND_FAILED", `${target}: ${why}`);
   const before = print(ref, env, sys);

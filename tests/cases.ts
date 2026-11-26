@@ -58,6 +58,8 @@ export const CASES: Job[] = [
   shape("no-delay", { kind: "keepAlive", restart: "always", delaySeconds: 0 }),
   shape("slow-restart", { kind: "keepAlive", restart: "on-failure", delaySeconds: 90 }),
   shape("timeout", { kind: "interval", minutes: 30 }, { timeout: 20 }),
+  shape("manual", { kind: "manual" }),
+  shape("manual-timeout", { kind: "manual" }, { timeout: 30 }),
   shape("calendar-timeout", { kind: "calendar", at: [{ hour: 3, minute: 0 }] }, { timeout: 10080 }),
 ];
 

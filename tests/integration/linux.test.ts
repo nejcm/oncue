@@ -113,11 +113,13 @@ describe.skipIf(!enabled)("systemd on this host", () => {
   const slow = { ...job("slow", { kind: "interval", minutes: 60 }, ["sleep", "600"]), timeout: 1 };
   const ok = job("ok", { kind: "interval", minutes: 60 }, ["true"]);
   const nap = job("nap", { kind: "interval", minutes: 60 }, ["sleep", "2"]);
+  const once = job("once", { kind: "manual" }, ["sh", "-c", "exit 4"]);
+  const busy = job("busy", { kind: "manual" }, ["sleep", "5"]);
   const bad = job("bad", { kind: "interval", minutes: 60 }, ["sh", "-c", "exit 3"]);
 
   afterAll(() => {
     if (!live) return;
-    for (const j of [timer, daemon, slow, ok, bad, nap]) {
+    for (const j of [timer, daemon, slow, ok, bad, nap, once, busy]) {
       try {
         uninstall(j);
       } catch (e) {
@@ -190,6 +192,28 @@ describe.skipIf(!enabled)("systemd on this host", () => {
     },
     30_000,
   );
+
+  test.skipIf(!live)("a manual job has no timer, runs only on demand, then switches to a schedule", () => {
+    expect(install(once).changed).toBe(true);
+    expect(install(once).changed).toBe(false);
+    expect(existsSync(join(unitDir, `${ns}-once.timer`))).toBe(false);
+    expect(status(once)).toMatchObject({ installed: true, active: false, lastExit: undefined });
+    expect(runJob(once, { wait: true })).toEqual({ exit: 4 });
+    const scheduled = { ...once, schedule: { kind: "interval", minutes: 60 } } as const;
+    expect(install(scheduled).changed).toBe(true);
+    expect(status(scheduled)).toMatchObject({ installed: true, active: true });
+    expect(install(once).changed).toBe(true);
+    expect(existsSync(join(unitDir, `${ns}-once.timer`))).toBe(false);
+    expect(existsSync(join(unitDir, `timers.target.wants/${ns}-once.timer`))).toBe(false);
+    expect(uninstall(once)).toEqual({ removed: true });
+  });
+
+  test.skipIf(!live)("status of a running manual job is active", async () => {
+    install(busy);
+    runJob(busy);
+    expect(await until(() => status(busy).active)).toBe(true);
+    expect(uninstall(busy)).toEqual({ removed: true });
+  });
 
   test.skipIf(!live)(
     "run --wait refuses to report a run already in progress",

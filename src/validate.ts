@@ -95,9 +95,12 @@ export function validateJob(input: unknown, opts: { install?: boolean } = {}): J
     if (s.restart !== "always" && s.restart !== "on-failure") fail('schedule.restart must be "always" or "on-failure"');
     optInt(s, "delaySeconds", 0, 86400, "schedule");
     if (j.catchUp !== undefined) fail("catchUp applies to timers only");
-    if (j.timeout !== undefined) fail("timeout applies to timers only");
+    if (j.timeout !== undefined) fail("timeout does not apply to keepAlive jobs");
+  } else if (s.kind === "manual") {
+    onlyKeys(s, ["kind"], "schedule.");
+    if (j.catchUp !== undefined) fail("catchUp applies to timers only");
   } else {
-    fail('schedule.kind must be "interval", "calendar" or "keepAlive"');
+    fail('schedule.kind must be "interval", "calendar", "keepAlive" or "manual"');
   }
   return j as unknown as Job;
 }

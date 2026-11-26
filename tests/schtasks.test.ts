@@ -183,6 +183,11 @@ test("status maps Get-ScheduledTask output", () => {
   expect([daemon("Running"), daemon("Ready")]).toEqual([true, false]);
   const timer = (State: string) => ts.status(intake, fakeEnv, fake(files(), [ours("intake", { State })]).sys).active;
   expect([timer("Ready"), timer("Running"), timer("Disabled")]).toEqual([true, true, false]);
+  const manual = { ...intake, schedule: { kind: "manual" } } as const;
+  const idle = (State: string) =>
+    ts.status(manual, fakeEnv, fake(files(manual), [ours("intake", { State })]).sys).active;
+  expect([idle("Ready"), idle("Running")]).toEqual([false, true]);
+  expect(ts.render({ ...manual, timeout: 5 }, fakeEnv).warnings).toHaveLength(1);
   expect(ts.status(intake, fakeEnv, fake(files(), [{ ...ours("intake"), Source: null }]).sys)).toMatchObject({
     installed: false,
   });

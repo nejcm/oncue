@@ -68,6 +68,39 @@ test("switching a timer job to keepAlive disables and removes the old timer", ()
   ]);
 });
 
+const manual = { ...intake, schedule: { kind: "manual" } } as const;
+const manualState = (service: string, timer = block("", "inactive")) =>
+  state("tender-intake.service tender-intake.timer", service, timer);
+
+test("manual install writes the service and reloads, but enables and starts nothing", () => {
+  const f = fakeSys({}, manualState(block("", "inactive")));
+  expect(systemd.install(manual, fakeEnv, f.sys).changed).toBe(true);
+  expect(f.mutations()).toEqual([`write ${dir}/tender-intake.service`, `exec ${sc} daemon-reload`]);
+  const again = fakeSys(files(manual), manualState(block("static", "inactive")));
+  expect(systemd.install(manual, fakeEnv, again.sys).changed).toBe(false);
+  expect(again.mutations()).toEqual([]);
+});
+
+test("switching to manual disables the old timer or keepAlive service", () => {
+  const timer = fakeSys(files(), manualState(block("static", "inactive"), block("enabled", "active")));
+  systemd.install(manual, fakeEnv, timer.sys);
+  expect(timer.mutations()).toEqual([
+    `exec ${sc} disable --now tender-intake.timer`,
+    `remove ${dir}/tender-intake.timer`,
+    `exec ${sc} daemon-reload`,
+  ]);
+  const daemon = fakeSys(
+    files(run),
+    state("tender-run.service tender-run.timer", block("enabled", "active"), block("", "inactive")),
+  );
+  systemd.install({ ...run, schedule: { kind: "manual" } }, fakeEnv, daemon.sys);
+  expect(daemon.mutations()).toEqual([
+    `exec ${sc} disable --now tender-run.service`,
+    `write ${dir}/tender-run.service`,
+    `exec ${sc} daemon-reload`,
+  ]);
+});
+
 test("unchanged files but a stopped or disabled unit: enable --now and report changed", () => {
   const f = fakeSys(
     files(),
@@ -218,6 +251,31 @@ test("status of a running keepAlive service: no exit yet, last run is its start"
   });
 });
 
+test("status of a manual job is active only while its oneshot runs", () => {
+  const props = "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp";
+  const show = (active: string, sub: string) =>
+    fakeSys(files(manual), {
+      [`${sc} show tender-intake.service -p ${props} --timestamp=unix`]: {
+        out: `ActiveState=${active}\nSubState=${sub}\nExecMainStartTimestamp=@1700000000\n`,
+      },
+    }).sys;
+  const active = (a: string, s: string) => systemd.status(manual, fakeEnv, show(a, s)).active;
+  expect([active("activating", "start"), active("inactive", "dead"), active("failed", "failed")]).toEqual([
+    true,
+    false,
+    false,
+  ]);
+});
+
+test("switching to manual also stops a disabled but still active keepAlive service", () => {
+  const f = fakeSys(
+    files(run),
+    state("tender-run.service tender-run.timer", block("disabled", "active"), block("", "inactive")),
+  );
+  systemd.install({ ...run, schedule: { kind: "manual" } }, fakeEnv, f.sys);
+  expect(f.mutations()[0]).toBe(`exec ${sc} disable --now tender-run.service`);
+});
+
 test("status on systemd < 251 (no --timestamp=unix) still reports state, without dates", () => {
   const props =
     "LoadState,ActiveState,SubState,Result,ExecMainStatus,ExecMainStartTimestamp,ExecMainExitTimestamp,NextElapseUSecRealtime,LastTriggerUSec";
@@ -291,8 +349,8 @@ const showRun = `${sc} show tender-intake.service -p ActiveState,Result,ExecMain
 const props = (start: number, result: string, status: number, active = "inactive") =>
   `ActiveState=${active}\nResult=${result}\nExecMainStatus=${status}\nExecMainStartTimestampMonotonic=${start}\n`;
 // `show` answers before and after the blocking start in turn.
-function waitWith(start: { code: number }, before: string, after: string) {
-  const f = fakeSys(files(), { [`${sc} start tender-intake.service`]: start });
+function waitWith(start: { code: number }, before: string, after: string, job = intake) {
+  const f = fakeSys(files(job), { [`${sc} start tender-intake.service`]: start });
   const exec = f.sys.exec;
   const outs = [before, after];
   f.sys.exec = (argv, o) => (argv.join(" ") === showRun ? { code: 0, out: outs.shift()!, err: "" } : exec(argv, o));
@@ -305,6 +363,7 @@ test("run --wait blocks on start and maps the new run's Result and ExecMainStatu
   expect(waitWith({ code: 1 }, old, props(200, "exit-code", 3, "failed"))()).toEqual({ exit: 3 });
   expect(waitWith({ code: 1 }, old, props(200, "timeout", 15, "failed"))()).toEqual({ exit: 15, timedOut: true });
   expect(code(waitWith({ code: 1 }, old, props(200, "success", 0)))).toBe("COMMAND_FAILED");
+  expect(waitWith({ code: 0 }, old, props(200, "success", 0), manual)()).toEqual({ exit: 0 });
   const daemon = fakeSys(files(run));
   expect(code(() => systemd.run!(run, fakeEnv, daemon.sys, true))).toBe("UNSUPPORTED");
   expect(daemon.mutations()).toEqual([]);

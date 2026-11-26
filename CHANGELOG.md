@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- `schedule: { "kind": "manual" }` installs a job with no schedule: it runs only through `run`, so a job can be tried with `run --wait` before its real schedule is installed. Task Scheduler warns that `timeout` does not apply to it.
+
 ## 0.2.0
 
 - `bun run build:node` bundles the CLI into `dist/oncue.mjs`, which runs on Node >= 18.3 without Bun. CI checks that it renders the same output as the Bun CLI.

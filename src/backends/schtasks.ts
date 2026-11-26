@@ -97,6 +97,7 @@ function calendarTrigger(a: CalendarAt): string {
 function triggers(job: Job, env: Env): string[] {
   const s = job.schedule;
   if (s.kind === "calendar") return s.at.map(calendarTrigger);
+  if (s.kind === "manual") return [];
   if (s.kind === "interval") return [el("TimeTrigger", repetition(`PT${s.minutes}M`) + el("StartBoundary", EPOCH))];
   if (!env.user)
     throw new OnCueError("NO_BACKEND", "Task Scheduler keepAlive needs the user name for its logon trigger");
@@ -145,13 +146,12 @@ function render(job: Job, env: Env): Rendered {
         : []),
     el("Enabled", "true"),
   ];
+  const trig = triggers(job, env);
   const task = [
     '<?xml version="1.0" encoding="UTF-16"?>',
     '<Task version="1.2" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">',
     `  <RegistrationInfo>${el("Source", marker(job))}${job.description === undefined ? "" : el("Description", xml(job.description))}</RegistrationInfo>`,
-    "  <Triggers>",
-    ...triggers(job, env).map((t) => `    ${t}`),
-    "  </Triggers>",
+    ...(trig.length ? ["  <Triggers>", ...trig.map((t) => `    ${t}`), "  </Triggers>"] : []),
     `  <Principals><Principal id="Author">${el("LogonType", "InteractiveToken")}${el("RunLevel", "LeastPrivilege")}</Principal></Principals>`,
     "  <Settings>",
     ...settings.map((s) => `    ${s}`),
@@ -170,6 +170,9 @@ function render(job: Job, env: Env): Rendered {
       ? ["Task Scheduler relaunches keepAlive jobs after any exit; restart: on-failure behaves as always"]
       : []),
     ...(job.leaveChildrenOnStop ? ["Task Scheduler: leaveChildrenOnStop is ignored"] : []),
+    ...(job.schedule.kind === "manual" && job.timeout
+      ? ["Task Scheduler applies timeout only to scheduled starts; a manual job's runs have no limit"]
+      : []),
   ];
   return {
     files: [
@@ -273,11 +276,12 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   const { task, native } = find(ref, sys);
   if (!task || owner(task) !== `${ref.namespace}/${ref.name}`)
     return { installed: false, active: false, warnings: [], native: "" };
-  const keepAlive = sys.read(paths(ref, env).xml)?.includes("<LogonTrigger>") ?? false;
+  const xmlText = sys.read(paths(ref, env).xml) ?? "";
+  const timer = !xmlText.includes("<LogonTrigger>") && /<(TimeTrigger|CalendarTrigger)>/.test(xmlText);
   const lastRun = unixDate(task.LastRun);
   return {
     installed: true,
-    active: keepAlive ? task.State === "Running" : task.State === "Ready" || task.State === "Running",
+    active: timer ? task.State === "Ready" || task.State === "Running" : task.State === "Running",
     lastExit: lastRun && task.LastResult !== null ? task.LastResult : undefined,
     lastRun,
     nextRun: unixDate(task.NextRun),

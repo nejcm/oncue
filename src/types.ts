@@ -3,7 +3,8 @@ export type CalendarAt = { minute: number; hour?: number; weekday?: Weekday; day
 export type Schedule =
   | { kind: "interval"; minutes: number }
   | { kind: "calendar"; at: CalendarAt[] }
-  | { kind: "keepAlive"; restart: "always" | "on-failure"; delaySeconds?: number };
+  | { kind: "keepAlive"; restart: "always" | "on-failure"; delaySeconds?: number }
+  | { kind: "manual" };
 
 export interface Job {
   namespace: string;

@@ -18,14 +18,14 @@ oncue turns a small, OS-neutral job description (command, working directory, env
 - **Idempotent.** `install` renders, compares with what is on disk and in the scheduler, and touches nothing when they match. Re-running it is safe.
 - **Owned definitions only.** Every file or task carries a `managed-by oncue <namespace>/<name>` marker. `list`, `status`, `run` and `uninstall` only act on marked definitions, and `install` refuses to overwrite one marked for another job.
 - **User scope.** Jobs run as the current user while that user is logged in (see [linger and sessions](docs/backends.md#sessions-and-logout)).
-- **Three schedule kinds.** Fixed `interval`, `calendar` slots, and `keepAlive` (long-running, restarted).
+- **Four schedule kinds.** Fixed `interval`, `calendar` slots, `keepAlive` (long-running, restarted), and `manual` (runs only when started with `run`).
 
 ## Install
 
 The library requires [Bun](https://bun.sh); the CLI also runs on Node (below). The package is not published to npm; add it as a git or local dependency:
 
 ```sh
-bun add github:nejcm/oncue#v0.2.0               # this repository, pinned to a tag
+bun add github:nejcm/oncue#v0.3.0               # this repository, pinned to a tag
 bun add file:/path/to/oncue                    # a local clone
 ```
 

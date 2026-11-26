@@ -1,0 +1,8 @@
+# managed-by oncue shape/manual
+[Unit]
+Description=shape/manual
+
+[Service]
+Type=oneshot
+WorkingDirectory=/tmp
+ExecStart="/usr/bin/true"
