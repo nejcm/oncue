@@ -32,6 +32,7 @@ oncue renders an OS-neutral job spec into native scheduler definitions (systemd 
 | Test | `bun run test` |
 | Unused code | `bun run knip` |
 | Verify | `bun run verify` |
+| Node bundle (`dist/oncue.mjs`) | `bun run build:node` |
 | Integration (touches the real scheduler under a throwaway namespace) | `ONCUE_IT=1 bun test tests/integration` |
 
 oxfmt uses the baseline preset except `singleQuote: false`, which keeps the double quotes the code was written with. `src/quote.ts` disables `no-control-regex` for `FORBIDDEN` because matching control characters is its purpose.

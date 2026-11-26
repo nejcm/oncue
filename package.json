@@ -34,6 +34,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build:node": "bun build src/bin.ts --target=node --outfile dist/oncue.mjs",
     "format": "oxfmt .",
     "format:check": "oxfmt --check .",
     "lint": "oxlint --deny-warnings .",
@@ -49,5 +50,10 @@
     "oxlint": "1.90.0",
     "typescript": "^5.9.0"
   },
-  "packageManager": "bun@1.4.5"
+  "packageManager": "bun@1.4.5",
+  "knip": {
+    "entry": [
+      "src/bin.ts"
+    ]
+  }
 }

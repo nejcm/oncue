@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- `bun run build:node` bundles the CLI into `dist/oncue.mjs`, which runs on Node >= 18.3 without Bun. CI checks that it renders the same output as the Bun CLI.
+
 ## 0.1.0
 
 First release. Not published to npm; install from the `v0.1.0` git tag.

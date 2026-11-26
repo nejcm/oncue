@@ -8,7 +8,7 @@ oncue list <namespace> [--backend id]
 oncue render <spec.json|-> [--backend id]
 ```
 
-Run as `bun run oncue …` in a project that depends on the package, or `bun /path/to/oncue/src/cli.ts …`. Flags may appear before or after the positional arguments. A flag that does not apply to the command is a usage error.
+Run as `bun run oncue …` in a project that depends on the package, or `bun /path/to/oncue/src/cli.ts …`. Without Bun, run the bundle that `bun run build:node` writes, `node dist/oncue.mjs …` (Node >= 18.3), or the source from a checkout with `node /path/to/oncue/src/cli.ts …` (Node >= 22.18; not from inside `node_modules`, where Node refuses to strip types). Flags may appear before or after the positional arguments. A flag that does not apply to the command is a usage error.
 
 ## Spec input
 

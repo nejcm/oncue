@@ -285,10 +285,11 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
 }
 
 function list(namespace: string, _env: Env, sys: Sys): string[] {
-  return tasks(namespace, sys)
+  const names = tasks(namespace, sys)
     .tasks.filter((t) => owner(t) === `${namespace}/${t.Name}`)
-    .map((t) => t.Name)
-    .toSorted();
+    .map((t) => t.Name);
+  names.sort();
+  return names;
 }
 
 export const taskScheduler: Backend = {

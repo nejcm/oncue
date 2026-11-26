@@ -22,6 +22,16 @@ jobs:
           bun-version-file: package.json
       - run: bun install --frozen-lockfile
       - run: bun run verify
+      - run: bun run build:node
+      - name: node bundle renders like the bun cli
+        shell: bash
+        run: |
+          for pair in systemd:intake launchd:intake schtasks:intake-win; do
+            b=${pair%%:*} f=tests/fixtures/${pair#*:}.json
+            node dist/oncue.mjs render "$f" --backend "$b" > "$RUNNER_TEMP/node.out"
+            bun src/cli.ts render "$f" --backend "$b" > "$RUNNER_TEMP/bun.out"
+            cmp "$RUNNER_TEMP/node.out" "$RUNNER_TEMP/bun.out"
+          done
       - run: bun test tests/integration
         env:
           ONCUE_IT: "1"

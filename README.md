@@ -15,7 +15,7 @@ oncue turns a small, OS-neutral job description (command, working directory, env
 
 ## Install
 
-Requires [Bun](https://bun.sh). The package is not published to npm; add it as a git or local dependency:
+The library requires [Bun](https://bun.sh); the CLI also runs on Node (below). The package is not published to npm; add it as a git or local dependency:
 
 ```sh
 bun add github:nejcm/oncue#v0.1.0               # this repository, pinned to a tag
@@ -23,6 +23,10 @@ bun add file:/path/to/oncue                    # a local clone
 ```
 
 The CLI is then available as `bun run oncue …` inside that project, or run it directly with `bun /path/to/oncue/src/cli.ts …`.
+
+### Run without Bun
+
+`bun run build:node` in a clone writes `dist/oncue.mjs`, a single file with no dependencies that runs on Node >= 18.3: `node dist/oncue.mjs …`. Copy it wherever you need it. From a checkout, Node >= 22.18 also runs the source directly with `node /path/to/oncue/src/cli.ts …`; this does not work from inside `node_modules`, where Node refuses to strip types.
 
 ## Usage
 
@@ -128,6 +132,7 @@ Integration tests for all three exist under `tests/integration/` and run with `O
 ```sh
 bun install --frozen-lockfile
 bun run verify                          # typecheck, oxlint, oxfmt check, tests, knip
+bun run build:node                      # single-file Node CLI at dist/oncue.mjs
 ONCUE_IT=1 bun test tests/integration   # touches the real scheduler under a throwaway namespace
 ```
 

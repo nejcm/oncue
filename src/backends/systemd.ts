@@ -225,14 +225,15 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
 }
 
 function list(namespace: string, env: Env, sys: Sys): string[] {
-  return sys
+  const names = sys
     .readdir(dir(env))
     .filter((f) => f.startsWith(`${namespace}-`) && f.endsWith(".service"))
     .flatMap((f) => {
       const m = sys.read(posix.join(dir(env), f))?.match(MARKER);
       return m && m[1] === namespace && f === `${namespace}-${m[2]}.service` ? [m[2]!] : [];
-    })
-    .toSorted();
+    });
+  names.sort();
+  return names;
 }
 
 export const systemd: Backend = {
