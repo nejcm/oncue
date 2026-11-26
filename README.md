@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo-light.svg" width="96" height="96" alt="oncue logo">
+  </picture>
+</p>
+
 # oncue
 
 Install jobs into the OS's own scheduler from one JSON spec: systemd user units on Linux, LaunchAgents on macOS, Task Scheduler on Windows.
