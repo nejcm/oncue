@@ -18,7 +18,7 @@ oncue turns a small, OS-neutral job description (command, working directory, env
 The library requires [Bun](https://bun.sh); the CLI also runs on Node (below). The package is not published to npm; add it as a git or local dependency:
 
 ```sh
-bun add github:nejcm/oncue#v0.1.0               # this repository, pinned to a tag
+bun add github:nejcm/oncue#v0.2.0               # this repository, pinned to a tag
 bun add file:/path/to/oncue                    # a local clone
 ```
 
