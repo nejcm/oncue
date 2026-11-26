@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { join } from "node:path";
-import { install, render, uninstall } from "../src/index.ts";
+import { install, render, run, uninstall } from "../src/index.ts";
 import type { Backend, Job } from "../src/types.ts";
 import { code, fakeEnv, fakeSys, withTool } from "./fakes.ts";
 
@@ -52,4 +52,9 @@ test.each([
   const f = fakeSys();
   expect(code(() => uninstall(ref as never, { backend: r.backend, env: fakeEnv, sys: f.sys }))).toBe("INVALID_SPEC");
   expect([r.removed, f.calls]).toEqual([[], []]);
+});
+
+test("run on a backend without run is UNSUPPORTED", () => {
+  const ref = { namespace: "tender", name: "intake" };
+  expect(code(() => run(ref, { backend: recorder().backend, env: fakeEnv, sys: fakeSys().sys }))).toBe("UNSUPPORTED");
 });

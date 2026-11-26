@@ -14,7 +14,7 @@ oncue renders an OS-neutral job spec into native scheduler definitions (systemd 
 - Zero runtime dependencies. Core code uses only `node:` modules, no `Bun.*`, so a later Node build stays possible.
 - Render functions are pure (spec in, file text out); every side effect goes through the injected `Sys`.
 - Never build shell strings. Quote per backend through `src/quote.ts`.
-- `list`, `status` and `uninstall` act only on definitions carrying the `managed-by oncue <ns>/<name>` marker.
+- `list`, `status`, `run` and `uninstall` act only on definitions carrying the `managed-by oncue <ns>/<name>` marker.
 - A backend is listed only in `src/backends/index.ts`.
 - Golden files and fixtures keep exact bytes: `.gitattributes` disables EOL conversion and oxfmt ignores them.
 - Follow the existing package manager, formatter, linter, and test runner. Do not migrate them as incidental cleanup.

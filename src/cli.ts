@@ -2,7 +2,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { OnCueError } from "./errors.ts";
-import { capturePath, install, list, render, status, uninstall, validateJob } from "./index.ts";
+import { capturePath, install, list, render, run, status, uninstall, validateJob } from "./index.ts";
 import { decode, dryRunSys, realSys } from "./sys.ts";
 import type { Env, ErrorCode, Job, Sys } from "./types.ts";
 
@@ -11,6 +11,7 @@ const USAGE = `usage:
   oncue uninstall <namespace> <name> [--backend id] [--dry-run]
   oncue status <namespace> [name] [--backend id] [--json]
   oncue list <namespace> [--backend id]
+  oncue run <namespace> <name> [--wait] [--backend id]
   oncue render <spec.json|-> [--backend id]`;
 
 const EXIT: Record<ErrorCode, number> = {
@@ -26,6 +27,7 @@ const COMMANDS: Record<string, { args: [number, number]; flags: string[] }> = {
   uninstall: { args: [2, 2], flags: ["backend", "dry-run"] },
   status: { args: [1, 2], flags: ["backend", "json"] },
   list: { args: [1, 1], flags: ["backend"] },
+  run: { args: [2, 2], flags: ["backend", "wait"] },
   render: { args: [1, 1], flags: ["backend"] },
 };
 
@@ -74,6 +76,7 @@ export function main(argv: string[], io: Io = {}): number {
           "capture-path": { type: "string" },
           "dry-run": { type: "boolean" },
           json: { type: "boolean" },
+          wait: { type: "boolean" },
         },
       });
     } catch (e) {
@@ -134,6 +137,17 @@ export function main(argv: string[], io: Io = {}): number {
       case "list":
         for (const n of list(a, o)) out(n);
         break;
+      case "run": {
+        if (!v.wait) {
+          run({ namespace: a, name: b ?? "" }, o);
+          out("started");
+          break;
+        }
+        const r = run({ namespace: a, name: b ?? "" }, { ...o, wait: true });
+        out(r.timedOut ? "timed out" : `exit ${r.exit ?? "unknown"}`);
+        // 124 as in GNU timeout(1).
+        return r.timedOut ? 124 : (r.exit ?? 1);
+      }
     }
     return 0;
   } catch (e) {

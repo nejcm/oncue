@@ -173,3 +173,44 @@ test("bootstrap after bootout retries a bounded number of times while launchd an
   expect(code(() => launchd.install(intake, fakeEnv, first.sys))).toBe("COMMAND_FAILED");
   expect(once()).toBe(1);
 });
+
+const printing = (fs: Record<string, string>, outs: string[]) => {
+  const f = fakeSys(fs);
+  const exec = f.sys.exec;
+  f.sys.exec = (argv, o) => (argv.join(" ") === print ? { code: 0, out: outs.shift() ?? "", err: "" } : exec(argv, o));
+  return f;
+};
+const snap = (state: string, runs?: number, tail = "") =>
+  `\tstate = ${state}\n${runs === undefined ? "" : `\truns = ${runs}\n`}${tail}`;
+const waitFor = (outs: string[]) => () => launchd.run!(intake, fakeEnv, printing(files(), outs).sys, true);
+
+test("run kickstarts; --wait waits for exactly one new run and reads its exit code", () => {
+  const f = fakeSys(files());
+  expect(launchd.run!(intake, fakeEnv, f.sys, false)).toEqual({});
+  expect(f.mutations()).toEqual(["exec launchctl kickstart gui/501/tender.intake"]);
+  const idle = snap("not running", 1, "\tlast exit code = 0\n");
+  expect(waitFor([idle, snap("running", 2), snap("not running", 2, "\tlast exit code = 7\n")])()).toEqual({ exit: 7 });
+  expect(waitFor([idle, snap("not running", 2, "\tlast exit code = 0\n")])()).toEqual({ exit: 0 });
+});
+
+test("run --wait fails on an ambiguous or missing result instead of guessing or polling forever", () => {
+  const idle = snap("not running", 10, "\tlast exit code = 0\n");
+  const codes = [
+    [idle, snap("not running", 12, "\tlast exit code = 0\n")],
+    [idle, snap("not running", 1, "\tlast exit code = 0\n")],
+    [snap("not running"), snap("not running")],
+    [snap("running", 10)],
+    [idle, idle],
+    [idle, snap("not running", 11, "\tlast terminating signal = Abort trap: 6\n")],
+  ].map((outs) => code(waitFor(outs)));
+  expect(codes).toEqual(Array(6).fill("COMMAND_FAILED"));
+});
+
+test("run refuses a missing or unmarked plist, and --wait on keepAlive", () => {
+  expect(code(() => launchd.run!(intake, fakeEnv, fakeSys().sys, false))).toBe("NOT_FOUND");
+  const g = fakeSys({ [plist]: "<plist/>\n" });
+  expect(code(() => launchd.run!(intake, fakeEnv, g.sys, false))).toBe("INVALID_SPEC");
+  const daemon = fakeSys(files(run));
+  expect(code(() => launchd.run!(run, fakeEnv, daemon.sys, true))).toBe("UNSUPPORTED");
+  expect([g.mutations(), daemon.mutations()]).toEqual([[], []]);
+});

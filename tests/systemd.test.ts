@@ -274,3 +274,49 @@ test("install creates the directory of a custom log before enabling", () => {
   systemd.install({ ...intake, log }, fakeEnv, f.sys);
   expect(f.mutations()[0]).toBe(`write ${log}`);
 });
+
+test("run starts the service without blocking; missing is NOT_FOUND, unmarked INVALID_SPEC", () => {
+  const f = fakeSys(files());
+  expect(systemd.run!(intake, fakeEnv, f.sys, false)).toEqual({});
+  expect(f.mutations()).toEqual([`exec ${sc} start --no-block tender-intake.service`]);
+  expect(code(() => systemd.run!(intake, fakeEnv, fakeSys().sys, false))).toBe("NOT_FOUND");
+  const unmarked = fakeSys({ [`${dir}/tender-intake.service`]: "[Service]\n" });
+  expect(code(() => systemd.run!(intake, fakeEnv, unmarked.sys, false))).toBe("INVALID_SPEC");
+  const timerOnly = fakeSys({ [`${dir}/tender-intake.timer`]: files()[`${dir}/tender-intake.timer`]! });
+  expect(code(() => systemd.run!(intake, fakeEnv, timerOnly.sys, false))).toBe("INVALID_SPEC");
+  expect([unmarked.mutations(), timerOnly.mutations()]).toEqual([[], []]);
+});
+
+const showRun = `${sc} show tender-intake.service -p ActiveState,Result,ExecMainStatus,ExecMainStartTimestampMonotonic`;
+const props = (start: number, result: string, status: number, active = "inactive") =>
+  `ActiveState=${active}\nResult=${result}\nExecMainStatus=${status}\nExecMainStartTimestampMonotonic=${start}\n`;
+// `show` answers before and after the blocking start in turn.
+function waitWith(start: { code: number }, before: string, after: string) {
+  const f = fakeSys(files(), { [`${sc} start tender-intake.service`]: start });
+  const exec = f.sys.exec;
+  const outs = [before, after];
+  f.sys.exec = (argv, o) => (argv.join(" ") === showRun ? { code: 0, out: outs.shift()!, err: "" } : exec(argv, o));
+  return () => systemd.run!(intake, fakeEnv, f.sys, true);
+}
+
+test("run --wait blocks on start and maps the new run's Result and ExecMainStatus", () => {
+  const old = props(100, "success", 0);
+  expect(waitWith({ code: 0 }, old, props(200, "success", 0))()).toEqual({ exit: 0 });
+  expect(waitWith({ code: 1 }, old, props(200, "exit-code", 3, "failed"))()).toEqual({ exit: 3 });
+  expect(waitWith({ code: 1 }, old, props(200, "timeout", 15, "failed"))()).toEqual({ exit: 15, timedOut: true });
+  expect(code(waitWith({ code: 1 }, old, props(200, "success", 0)))).toBe("COMMAND_FAILED");
+  const daemon = fakeSys(files(run));
+  expect(code(() => systemd.run!(run, fakeEnv, daemon.sys, true))).toBe("UNSUPPORTED");
+  expect(daemon.mutations()).toEqual([]);
+});
+
+test("run --wait fails when no new run started or a later run started before the read", () => {
+  const old = props(100, "success", 0);
+  // start-limit-hit: start fails, no new run, the old result must not be reported.
+  expect(code(waitWith({ code: 1 }, old, props(100, "start-limit-hit", 0, "failed")))).toBe("COMMAND_FAILED");
+  // Joined a run already in progress: start succeeds, the start timestamp is unchanged.
+  expect(code(waitWith({ code: 0 }, props(100, "success", 0, "activating"), props(100, "success", 0)))).toBe(
+    "COMMAND_FAILED",
+  );
+  expect(code(waitWith({ code: 0 }, old, props(300, "success", 0, "activating")))).toBe("COMMAND_FAILED");
+});

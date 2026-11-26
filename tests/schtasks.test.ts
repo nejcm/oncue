@@ -251,3 +251,23 @@ test("install creates a custom log only in an empty directory, and a missing sch
   });
   expect(code(() => ts.install({ ...run, description: "changed" }, fakeEnv, g.sys))).toBe("NOT_FOUND");
 });
+
+test("run starts the task; --wait is UNSUPPORTED", () => {
+  const f = fake(files(), [ours("intake")]);
+  expect(ts.run!(intake, fakeEnv, f.sys, false)).toEqual({});
+  expect(f.mutations()).toEqual(["exec schtasks.exe /run /tn \\tender\\intake"]);
+  const w = fake(files(), [ours("intake")]);
+  expect(code(() => ts.run!(intake, fakeEnv, w.sys, true))).toBe("UNSUPPORTED");
+  expect(w.calls).toEqual([]);
+});
+
+test("run refuses a missing task, an unmarked task, and missing or unmarked local files", () => {
+  expect(code(() => ts.run!(intake, fakeEnv, fake().sys, false))).toBe("NOT_FOUND");
+  const cases = [
+    fake(files(), [{ ...ours("intake"), Source: null }]),
+    fake({ ...files(), [ps1]: "exit 0\n" }, [ours("intake")]),
+    fake({ [ps1]: files()[ps1]! }, [ours("intake")]),
+  ];
+  expect(cases.map((f) => code(() => ts.run!(intake, fakeEnv, f.sys, false)))).toEqual(Array(3).fill("INVALID_SPEC"));
+  expect(cases.map((f) => f.mutations())).toEqual([[], [], []]);
+});

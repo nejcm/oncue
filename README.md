@@ -9,7 +9,7 @@ oncue turns a small, OS-neutral job description (command, working directory, env
 - **Native scheduler, no daemon.** Jobs survive oncue being removed; logs, status and restarts are the scheduler's own.
 - **Zero runtime dependencies.** Bun plus `node:` built-ins.
 - **Idempotent.** `install` renders, compares with what is on disk and in the scheduler, and touches nothing when they match. Re-running it is safe.
-- **Owned definitions only.** Every file or task carries a `managed-by oncue <namespace>/<name>` marker. `list`, `status` and `uninstall` only act on marked definitions, and `install` refuses to overwrite one marked for another job.
+- **Owned definitions only.** Every file or task carries a `managed-by oncue <namespace>/<name>` marker. `list`, `status`, `run` and `uninstall` only act on marked definitions, and `install` refuses to overwrite one marked for another job.
 - **User scope.** Jobs run as the current user while that user is logged in (see [linger and sessions](docs/backends.md#sessions-and-logout)).
 - **Three schedule kinds.** Fixed `interval`, `calendar` slots, and `keepAlive` (long-running, restarted).
 
@@ -85,8 +85,10 @@ $ oncue install backup.json --capture-path bun,git
 installed
 $ oncue install backup.json --capture-path bun,git
 unchanged
+$ oncue run acme backup --wait
+exit 0
 $ oncue status acme
-backup: active, next 2026-11-26T02:30:00.000Z
+backup: active, last exit 0, next 2026-11-26T02:30:00.000Z
 $ oncue uninstall acme backup
 removed
 ```

@@ -5,6 +5,7 @@ oncue install <spec.json|-> [--backend id] [--capture-path bun,gh,git] [--dry-ru
 oncue uninstall <namespace> <name> [--backend id] [--dry-run]
 oncue status <namespace> [name] [--backend id] [--json]
 oncue list <namespace> [--backend id]
+oncue run <namespace> <name> [--wait] [--backend id]
 oncue render <spec.json|-> [--backend id]
 ```
 
@@ -21,7 +22,7 @@ echo '{"namespace":"acme","name":"sync","command":["/usr/bin/rsync","-a","src/",
 
 ## `--backend <id>`
 
-One of `systemd`, `launchd`, `schtasks`. Without it, `install`, `uninstall`, `status` and `list` use the first backend for the current OS whose scheduler responds (see [availability](backends.md#availability)); `render` takes the first backend for the current OS without probing. With it, the availability check is skipped. An unknown id is `NO_BACKEND` (exit 3).
+One of `systemd`, `launchd`, `schtasks`. Without it, `install`, `uninstall`, `status`, `list` and `run` use the first backend for the current OS whose scheduler responds (see [availability](backends.md#availability)); `render` takes the first backend for the current OS without probing. With it, the availability check is skipped. An unknown id is `NO_BACKEND` (exit 3).
 
 ## `render`
 
@@ -119,6 +120,29 @@ Prints the status object (with `name`) for one job, or an array of them for a na
 
 Prints the names of the jobs in the namespace that carry an oncue marker, one per line, sorted.
 
+## `run <namespace> <name>`
+
+Starts an installed job now, outside its schedule, and prints `started`. A job that is not installed is `NOT_FOUND` (exit 3); a definition without this job's marker (on systemd the `.service`, on Task Scheduler the task and its `.ps1` and `.xml`) is refused with `INVALID_SPEC` (exit 2). If the job is already running, no second instance starts and `started` is still printed. Per scheduler (see [backends](backends.md#run)): `systemctl --user start --no-block <ns>-<name>.service`, `launchctl kickstart gui/<uid>/<ns>.<name>`, `schtasks /run /tn \<ns>\<name>`.
+
+On Task Scheduler a run started this way ignores the job's `timeout` ([on-demand starts bypass `ExecutionTimeLimit`](backends.md#timeout)).
+
+### `--wait`
+
+Blocks until the run ends, prints `exit <n>` or `timed out`, and exits with:
+
+| Exit | Cause |
+|---|---|
+| `<n>` | The job's own exit code (0 on success); on POSIX only its low 8 bits survive |
+| 124 | systemd stopped the run for exceeding its `timeout` (`Result=timeout`), as with `timeout(1)` |
+| 2, 3, 4 | oncue's own errors, as below; they print `oncue: <CODE>: …` on stderr, which a job's exit code does not |
+
+`--wait` reports a run this command started, best-effort. When none started (the job was already running, or systemd refused the start, e.g. its start rate limit) or oncue detects that the result may belong to another run, `--wait` fails with `COMMAND_FAILED` (exit 4) rather than report another run's exit. On systemd, a run another caller (a timer, another `run` or `run --wait`) starts after oncue's first status read can be joined, and its result reported as this one, if it is still in progress when systemd processes oncue's `start`, and a run that starts and finishes between `start` returning and the final read can supply the reported result. On launchd, a scheduled start between the first read and the kick can supply the result when it is the only run added ([details](backends.md#run)). `--wait` on a `keepAlive` job is `UNSUPPORTED` (exit 2): it never ends by design. Task Scheduler does not support `--wait` (`UNSUPPORTED`): it reports only the latest run's result, which cannot be tied to this start. There is no wait limit; the job's `timeout` bounds it where the scheduler enforces one.
+
+```console
+$ oncue run acme backup --wait
+exit 0
+```
+
 ## Errors and exit codes
 
 Errors are printed to stderr as `oncue: <CODE>: <message>`; usage errors as `oncue: <message>` followed by the usage text.
@@ -130,6 +154,8 @@ Errors are printed to stderr as `oncue: <CODE>: <message>`; usage errors as `onc
 | 2 | Usage error (unknown command or flag, wrong argument count, unreadable spec file), `INVALID_SPEC`, `UNSUPPORTED` |
 | 3 | `NO_BACKEND`, `NOT_FOUND` |
 | 4 | `COMMAND_FAILED` (a scheduler command exited non-zero) |
+
+`run --wait` exits with the job's exit code instead when it gets one; see [`--wait`](#--wait).
 
 ```console
 $ oncue render tests/fixtures/bad.json

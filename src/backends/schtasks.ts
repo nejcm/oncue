@@ -2,7 +2,7 @@ import { win32 } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { ps, xml } from "../quote.ts";
 import { decode, ensureLogDir } from "../sys.ts";
-import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
+import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, RunResult, Status, Sys } from "../types.ts";
 import { validateName } from "../validate.ts";
 
 const DAYS = {
@@ -286,6 +286,26 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   };
 }
 
+function run(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult {
+  // LastRunTime/LastTaskResult describe whichever run came last, so no result can be tied to this start.
+  if (wait) throw new OnCueError("UNSUPPORTED", "Task Scheduler: run --wait is not supported");
+  const { task } = find(ref, sys);
+  if (!task) throw new OnCueError("NOT_FOUND", `${ref.namespace}/${ref.name} is not installed`);
+  const p = paths(ref, env);
+  const unmarked =
+    owner(task) !== `${ref.namespace}/${ref.name}`
+      ? `task ${taskName(ref)}`
+      : !sys.read(p.ps1)?.includes(`# ${marker(ref)}\n`)
+        ? p.ps1
+        : !sys.read(p.xml)?.includes(`<Source>${marker(ref)}</Source>`)
+          ? p.xml
+          : undefined;
+  if (unmarked)
+    throw new OnCueError("INVALID_SPEC", `${unmarked} is not managed by oncue as ${ref.namespace}/${ref.name}`);
+  schtasks(sys, "/run", "/tn", taskName(ref));
+  return {};
+}
+
 function list(namespace: string, _env: Env, sys: Sys): string[] {
   const names = tasks(namespace, sys)
     .tasks.filter((t) => owner(t) === `${namespace}/${t.Name}`)
@@ -310,4 +330,5 @@ export const taskScheduler: Backend = {
   uninstall,
   status,
   list,
+  run,
 };

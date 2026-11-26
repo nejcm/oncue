@@ -1,8 +1,8 @@
 import { posix } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { xml } from "../quote.ts";
-import { ensureLogDir } from "../sys.ts";
-import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
+import { ensureLogDir, poll } from "../sys.ts";
+import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, RunResult, Status, Sys } from "../types.ts";
 
 const WEEKDAYS = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
 const MARKER = /^<!-- managed-by oncue ([a-z0-9-]+)\/([a-z0-9-]+) -->$/m;
@@ -164,6 +164,9 @@ function uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean } {
   return { removed: true };
 }
 
+const running = (native: string) => /^\s*state = running/m.test(native);
+const runs = (native: string) => native.match(/^\s*runs = (\d+)/m)?.[1];
+
 function status(ref: JobRef, env: Env, sys: Sys): Status {
   const text = sys.read(plistPath(ref, env));
   if (owner(text) !== `${ref.namespace}/${ref.name}`)
@@ -175,11 +178,49 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   const keepAlive = text!.includes("<key>KeepAlive</key>");
   return {
     installed: true,
-    active: keepAlive ? /^\s*state = running/m.test(native) : true,
+    active: keepAlive ? running(native) : true,
     lastExit: exit ? Number(exit[1]) : undefined,
     warnings: [],
     native,
   };
+}
+
+function run(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult {
+  const text = sys.read(plistPath(ref, env));
+  if (text === undefined) throw new OnCueError("NOT_FOUND", `${ref.namespace}/${ref.name} is not installed`);
+  if (owner(text) !== `${ref.namespace}/${ref.name}`)
+    throw new OnCueError(
+      "INVALID_SPEC",
+      `${plistPath(ref, env)} is not managed by oncue as ${ref.namespace}/${ref.name}`,
+    );
+  const target = `${domain(env)}/${label(ref)}`;
+  if (!wait) {
+    launchctl(sys, true, "kickstart", target);
+    return {};
+  }
+  if (text.includes("<key>KeepAlive</key>"))
+    throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
+  const fail = (why: string) => new OnCueError("COMMAND_FAILED", `${target}: ${why}`);
+  const before = print(ref, env, sys);
+  if (before === undefined) throw fail("not loaded");
+  const n0 = Number(runs(before) ?? NaN);
+  if (Number.isNaN(n0)) throw fail("launchctl print shows no run count");
+  if (running(before)) throw fail("already running; no new run started");
+  launchctl(sys, true, "kickstart", target);
+  return poll(() => {
+    const now = print(ref, env, sys) ?? "";
+    const n = Number(runs(now) ?? NaN);
+    if (Number.isNaN(n)) throw fail("launchctl print shows no run count");
+    if (n > n0 + 1) throw fail("another run ended before this one's result was read");
+    if (n < n0) throw fail("run count went down; the job was reloaded");
+    if (running(now) || /^\s*state = spawn scheduled/m.test(now)) return undefined;
+    if (n === n0) throw fail("kickstart started no new run");
+    const signal = now.match(/^\s*last terminating signal = (.*)$/m);
+    if (signal) throw fail(`run ended by signal ${signal[1]}`);
+    const exit = now.match(/^\s*last exit code = (\d+)/m);
+    if (!exit) throw fail("launchctl print reports no exit code");
+    return { exit: Number(exit[1]) };
+  });
 }
 
 function list(namespace: string, env: Env, sys: Sys): string[] {
@@ -210,4 +251,5 @@ export const launchd: Backend = {
   uninstall,
   status,
   list,
+  run,
 };

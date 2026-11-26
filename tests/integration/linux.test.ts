@@ -3,11 +3,12 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSy
 import { homedir, tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { systemd } from "../../src/backends/systemd.ts";
-import { install, list, status, uninstall } from "../../src/index.ts";
+import { install, list, run as runJob, status, uninstall } from "../../src/index.ts";
 import { realSys } from "../../src/sys.ts";
 import type { Job } from "../../src/types.ts";
 import { CASES } from "../cases.ts";
-import { fakeEnv } from "../fakes.ts";
+import { code, fakeEnv } from "../fakes.ts";
+import type { OnCueError } from "../../src/errors.ts";
 
 const run = (argv: string[]) => realSys.exec(argv, { mutates: false, ok: [0, 1] });
 // Without a user session verify cannot start its manager, and vendor units can add unrelated warnings.
@@ -110,10 +111,13 @@ describe.skipIf(!enabled)("systemd on this host", () => {
   const timer = job("tick", { kind: "interval", minutes: 15 }, ["true"]);
   const daemon = job("daemon", { kind: "keepAlive", restart: "on-failure", delaySeconds: 5 }, ["sleep", "600"]);
   const slow = { ...job("slow", { kind: "interval", minutes: 60 }, ["sleep", "600"]), timeout: 1 };
+  const ok = job("ok", { kind: "interval", minutes: 60 }, ["true"]);
+  const nap = job("nap", { kind: "interval", minutes: 60 }, ["sleep", "2"]);
+  const bad = job("bad", { kind: "interval", minutes: 60 }, ["sh", "-c", "exit 3"]);
 
   afterAll(() => {
     if (!live) return;
-    for (const j of [timer, daemon, slow]) {
+    for (const j of [timer, daemon, slow, ok, bad, nap]) {
       try {
         uninstall(j);
       } catch (e) {
@@ -160,6 +164,42 @@ describe.skipIf(!enabled)("systemd on this host", () => {
       expect(uninstall(slow)).toEqual({ removed: true });
     },
     100_000,
+  );
+
+  test.skipIf(!live)(
+    "run starts a job now; run --wait returns its exit code",
+    async () => {
+      install(ok);
+      install(bad);
+      expect(runJob(ok)).toEqual({});
+      expect(await until(() => status(ok).lastExit === 0)).toBe(true);
+      expect(runJob(ok, { wait: true })).toEqual({ exit: 0 });
+      expect(runJob(bad, { wait: true })).toEqual({ exit: 3 });
+      // Past StartLimitBurst (5 per 10 s) systemd refuses the start; that must not read as the last run's exit.
+      const results = Array.from({ length: 7 }, () => {
+        try {
+          return runJob(ok, { wait: true }).exit;
+        } catch (e) {
+          return (e as OnCueError).code;
+        }
+      });
+      expect(results).toContain("COMMAND_FAILED");
+      expect(results.every((r) => r === 0 || r === "COMMAND_FAILED")).toBe(true);
+      expect(uninstall(ok)).toEqual({ removed: true });
+      expect(uninstall(bad)).toEqual({ removed: true });
+    },
+    30_000,
+  );
+
+  test.skipIf(!live)(
+    "run --wait refuses to report a run already in progress",
+    () => {
+      install(nap);
+      runJob(nap);
+      expect(code(() => runJob(nap, { wait: true }))).toBe("COMMAND_FAILED");
+      expect(uninstall(nap)).toEqual({ removed: true });
+    },
+    30_000,
   );
 
   let pids = "";

@@ -5,7 +5,7 @@ import { which } from "./path.ts";
 import { BACKENDS } from "./backends/index.ts";
 import { selectBackend } from "./select.ts";
 import { realSys } from "./sys.ts";
-import type { Backend, Env, JobRef, Rendered, Status, Sys } from "./types.ts";
+import type { Backend, Env, JobRef, Rendered, RunResult, Status, Sys } from "./types.ts";
 import { validateJob, validateName } from "./validate.ts";
 
 export type * from "./types.ts";
@@ -104,4 +104,12 @@ export function list(namespace: string, o: Options = {}): string[] {
   const ns = validateName(namespace, "namespace");
   const { env, sys, backend } = setup(o);
   return backend.list(ns, env, sys);
+}
+
+/** Starts an installed job now; with `wait`, blocks until that run ends and returns its exit. */
+export function run(r: JobRef, o: Options & { wait?: boolean } = {}): RunResult {
+  const valid = ref(r);
+  const { env, sys, backend } = setup(o);
+  if (!backend.run) throw new OnCueError("UNSUPPORTED", `${backend.id}: run is not supported`);
+  return backend.run(valid, env, sys, o.wait ?? false);
 }

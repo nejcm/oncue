@@ -51,6 +51,8 @@ export interface Status {
   native: string;
 }
 
+export type RunResult = { exit?: number; timedOut?: true };
+
 export interface Backend {
   readonly id: string;
   readonly platforms: readonly NodeJS.Platform[];
@@ -60,6 +62,7 @@ export interface Backend {
   uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean };
   status(ref: JobRef, env: Env, sys: Sys): Status;
   list(namespace: string, env: Env, sys: Sys): string[];
+  run?(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult;
 }
 
 export type ErrorCode = "INVALID_SPEC" | "UNSUPPORTED" | "NO_BACKEND" | "NOT_FOUND" | "COMMAND_FAILED";

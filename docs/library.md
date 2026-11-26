@@ -1,8 +1,8 @@
 # Library API
 
 ```ts
-import { install, render, uninstall, status, list, validateJob, capturePath, which, BACKENDS, OnCueError } from "@nejcm/oncue";
-import type { Job, Schedule, CalendarAt, Weekday, JobRef, Options, Env, Sys, ExecResult, Rendered, Status, Backend, ErrorCode } from "@nejcm/oncue";
+import { install, render, uninstall, status, list, run, validateJob, capturePath, which, BACKENDS, OnCueError } from "@nejcm/oncue";
+import type { Job, Schedule, CalendarAt, Weekday, JobRef, Options, Env, Sys, ExecResult, Rendered, Status, RunResult, Backend, ErrorCode } from "@nejcm/oncue";
 ```
 
 The package ships TypeScript source (`src/index.ts`) and runs on Bun. All functions are synchronous. Every function that takes a spec or a namespace/name validates it first and throws `OnCueError` on bad input.
@@ -116,6 +116,22 @@ for (const name of list("acme")) {
 }
 
 if (uninstall({ namespace: "acme", name: "sync" }).removed) console.log("removed");
+```
+
+## `run(ref, options?)`
+
+```ts
+function run(r: JobRef, o?: Options & { wait?: boolean }): RunResult;
+type RunResult = { exit?: number; timedOut?: true };
+```
+
+Starts an installed, marked job now and returns `{}`. Throws `NOT_FOUND` when the job is not installed and `INVALID_SPEC` when the definition is not marked as this job. With `wait: true` it blocks until the run ends and returns its `exit`, plus `timedOut: true` when systemd stopped it for exceeding `timeout`; it throws `COMMAND_FAILED` when it sees that no new run started (already running, or the start was refused) or it detects that the result may be another run's. Attribution to this start is best-effort on systemd and launchd ([backends](backends.md#run)). `wait` throws `UNSUPPORTED` on a `keepAlive` job and on Task Scheduler. systemd blocks in `systemctl start`; launchd polls once a second, with no limit. Per-scheduler details are in [backends](backends.md#run).
+
+```ts
+import { run } from "@nejcm/oncue";
+
+const { exit } = run({ namespace: "acme", name: "backup" }, { wait: true });
+process.exitCode = exit;
 ```
 
 ## `validateJob(input)`
@@ -243,10 +259,11 @@ interface Backend {
   uninstall(ref: JobRef, env: Env, sys: Sys): { removed: boolean };
   status(ref: JobRef, env: Env, sys: Sys): Status;
   list(namespace: string, env: Env, sys: Sys): string[];
+  run?(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult; // with wait, must return exit
 }
 ```
 
-Pass the object as `backend`. oncue still validates the spec and names, and `install` hands the backend a job whose `command[0]` is already absolute. `available()` is not consulted for an object. `render` uses the host `env` when `platforms` includes the host platform, otherwise placeholders for `platforms[0]`. `BACKENDS` lists the built-in ones: `systemd`, `launchd`, `schtasks`.
+Pass the object as `backend`. Without `run`, `run()` throws `UNSUPPORTED`. oncue still validates the spec and names, and `install` hands the backend a job whose `command[0]` is already absolute. `available()` is not consulted for an object. `render` uses the host `env` when `platforms` includes the host platform, otherwise placeholders for `platforms[0]`. `BACKENDS` lists the built-in ones: `systemd`, `launchd`, `schtasks`.
 
 A minimal backend that writes one crontab-style line per job (illustration only, it does not register anything):
 

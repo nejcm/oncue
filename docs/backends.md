@@ -119,6 +119,16 @@ Every backend creates a missing directory for a custom `log` path before activat
 
 A definition at the job's path without a marker is overwritten by `install` but refused by `uninstall`; one marked for another job is refused by both. On Task Scheduler the check reads the registered task's `RegistrationInfo/Source` and the marker in the `.ps1`/`.xml`; leftover files with no registered task are removed by `uninstall` only if they carry the marker.
 
+## Run
+
+`run` checks the marker like `uninstall`, then starts the job once, outside its schedule. A job that is already running is not started twice. `--wait` reports a run this command started; when it detects otherwise, it fails with `COMMAND_FAILED` instead of reporting another run's result. Attribution is best-effort on systemd and launchd (below).
+
+- systemd: the `.service` must carry the marker. `systemctl --user start --no-block <ns>-<name>.service`. With `--wait`, a blocking `start` instead: for a `oneshot` service it returns when the run ends. `ExecMainStartTimestampMonotonic` read before and after tells whether a new run started (a refused start, e.g. `start-limit-hit`, or joining a run already in progress at the first read leaves it unchanged); `ActiveState` other than `inactive`/`failed` afterwards means a later run already began. `exit` is `ExecMainStatus`; `timedOut` is `Result=timeout`. A run killed by a signal reports the signal number as its exit. Best-effort: a run another caller (a timer, another `run` or `run --wait`) starts after the first read can be joined, and its result reported as ours, if it is still in progress when systemd processes our `start`, and a run that starts and finishes between `start` returning and the second read can supply the reported result.
+- launchd: `launchctl kickstart gui/<uid>/<label>` (without `-k`, a running instance is left alone). `--wait` refuses a job that is running, reads `runs = <n>` from `launchctl print`, kicks, and polls until `state` is neither `running` nor `spawn scheduled`. Exactly one more run gives `exit` from `last exit code`; an unchanged count (no new run), a count up by two or more (another run's result may have replaced it), a count below the one read (the job was reloaded), a missing count, or `last terminating signal` (killed by a signal) fail. A scheduled start between the read and the kick supplies the result when it is the only run added (if the kick then adds another, the count is up by two and `--wait` fails). Best-effort, like status.
+- Task Scheduler: the task's `Source` and the marker in its `.ps1` and `.xml` must all name the job. `schtasks /run /tn \<ns>\<name>`. No `--wait` (`UNSUPPORTED`): `LastRunTime` (whole seconds) and `LastTaskResult` describe whichever run came last. On-demand runs bypass `ExecutionTimeLimit`, so `timeout` does not apply ([Timeout](#timeout)).
+
+`--wait` on a `keepAlive` job is `UNSUPPORTED`. launchd polls once a second with no overall limit.
+
 ## Status
 
 | Field | systemd | launchd | Task Scheduler |

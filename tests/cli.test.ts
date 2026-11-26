@@ -225,3 +225,54 @@ test.skipIf(process.platform === "win32")("bin: a reader closing the pipe early 
   expect(r.stderr).toContain("oncue exited 0");
   expect(r.stderr).not.toContain("EPIPE");
 });
+
+describe("run", () => {
+  const units = "/home/u/.config/systemd/user";
+  const show =
+    "systemctl --user show tender-intake.service -p ActiveState,Result,ExecMainStatus,ExecMainStartTimestampMonotonic";
+  const job = (start: { code: number }, out: string) => {
+    const f = fakeSys(
+      {
+        [`${units}/tender-intake.service`]: "# managed-by oncue tender/intake\n",
+        [`${units}/tender-intake.timer`]: "# managed-by oncue tender/intake\n",
+      },
+      { "systemctl --user start tender-intake.service": start },
+    );
+    const exec = f.sys.exec;
+    const outs = ["ExecMainStartTimestampMonotonic=100\n", `ExecMainStartTimestampMonotonic=200\n${out}`];
+    f.sys.exec = (argv, o) => (argv.join(" ") === show ? { code: 0, out: outs.shift()!, err: "" } : exec(argv, o));
+    return f.sys;
+  };
+  const wait = (start: { code: number }, out: string) =>
+    run(["run", "tender", "intake", "--wait", "--backend", "systemd"], job(start, out));
+
+  test("without --wait prints started", () => {
+    expect(run(["run", "tender", "intake", "--backend", "systemd"], job({ code: 0 }, ""))).toEqual({
+      code: 0,
+      out: "started",
+      err: "",
+    });
+  });
+
+  test("--wait exits with the job's exit code, 124 on timeout", () => {
+    expect(wait({ code: 0 }, "ActiveState=inactive\nResult=success\nExecMainStatus=0\n")).toEqual({
+      code: 0,
+      out: "exit 0",
+      err: "",
+    });
+    expect(wait({ code: 1 }, "ActiveState=failed\nResult=exit-code\nExecMainStatus=1\n")).toEqual({
+      code: 1,
+      out: "exit 1",
+      err: "",
+    });
+    expect(wait({ code: 1 }, "ActiveState=failed\nResult=timeout\nExecMainStatus=15\n")).toEqual({
+      code: 124,
+      out: "timed out",
+      err: "",
+    });
+  });
+
+  test("a job that is not installed exits 3", () => {
+    expect(run(["run", "tender", "intake", "--backend", "systemd"]).code).toBe(3);
+  });
+});

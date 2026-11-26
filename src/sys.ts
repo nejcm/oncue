@@ -16,6 +16,17 @@ export function ensureLogDir(sys: Sys, log: string | undefined, path: Pick<typeo
   if (log && log !== "native" && sys.readdir(path.dirname(log)).length === 0) sys.write(log, "");
 }
 
+const PAUSE = new Int32Array(new SharedArrayBuffer(4));
+
+/** Calls `probe` every `ms` until it returns a value. */
+export function poll<T>(probe: () => T | undefined, ms = 1000): T {
+  for (;;) {
+    const r = probe();
+    if (r !== undefined) return r;
+    Atomics.wait(PAUSE, 0, 0, ms);
+  }
+}
+
 const missing = (e: unknown) => (e as NodeJS.ErrnoException).code === "ENOENT";
 
 export const realSys: Sys = {

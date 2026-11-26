@@ -1,6 +1,6 @@
 {
   "name": "@nejcm/oncue",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Install jobs into the native OS scheduler: systemd, launchd, Task Scheduler",
   "keywords": [
     "bun",

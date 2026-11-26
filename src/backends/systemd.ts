@@ -2,7 +2,7 @@ import { posix } from "node:path";
 import { OnCueError } from "../errors.ts";
 import { systemdArg, systemdEnv, systemdText } from "../quote.ts";
 import { ensureLogDir } from "../sys.ts";
-import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, Status, Sys } from "../types.ts";
+import type { Backend, CalendarAt, Env, Job, JobRef, Rendered, RunResult, Status, Sys } from "../types.ts";
 
 const DAYS = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" };
 const MARKER = /^# managed-by oncue ([a-z0-9-]+)\/([a-z0-9-]+)$/m;
@@ -226,6 +226,39 @@ function status(ref: JobRef, env: Env, sys: Sys): Status {
   };
 }
 
+function run(ref: JobRef, env: Env, sys: Sys, wait: boolean): RunResult {
+  const files = owned(ref, env, sys);
+  if (files.length === 0) throw new OnCueError("NOT_FOUND", `${ref.namespace}/${ref.name} is not installed`);
+  const service = `${unit(ref)}.service`;
+  const bad =
+    files.find((f) => !f.mine)?.path ??
+    (files.some((f) => f.path.endsWith(".service")) ? undefined : posix.join(dir(env), service));
+  if (bad) throw new OnCueError("INVALID_SPEC", `${bad} is not managed by oncue as ${ref.namespace}/${ref.name}`);
+  if (!wait) {
+    systemctl(sys, true, "start", "--no-block", service);
+    return {};
+  }
+  if (!files.some((f) => f.path.endsWith(".timer")))
+    throw new OnCueError("UNSUPPORTED", "run --wait does not apply to keepAlive jobs");
+  const props = ["ActiveState", "Result", "ExecMainStatus", "ExecMainStartTimestampMonotonic"];
+  const before = show(sys, [service], props).blocks[0] ?? {};
+  // A blocking start of a oneshot returns once the run ends; a run already in progress is joined, not restarted.
+  let failed: OnCueError | undefined;
+  try {
+    systemctl(sys, true, "start", service);
+  } catch (e) {
+    if (!(e instanceof OnCueError) || e.code !== "COMMAND_FAILED") throw e;
+    failed = e;
+  }
+  const svc = show(sys, [service], props).blocks[0] ?? {};
+  if (svc.ExecMainStartTimestampMonotonic === before.ExecMainStartTimestampMonotonic)
+    throw failed ?? new OnCueError("COMMAND_FAILED", `${service} was already running; no new run started`);
+  if (svc.ActiveState !== "inactive" && svc.ActiveState !== "failed")
+    throw new OnCueError("COMMAND_FAILED", `another run of ${service} started before this run's result was read`);
+  if (failed && svc.Result === "success") throw failed;
+  return { exit: Number(svc.ExecMainStatus), ...(svc.Result === "timeout" && { timedOut: true }) };
+}
+
 function list(namespace: string, env: Env, sys: Sys): string[] {
   const names = sys
     .readdir(dir(env))
@@ -254,4 +287,5 @@ export const systemd: Backend = {
   uninstall,
   status,
   list,
+  run,
 };
